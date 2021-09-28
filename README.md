@@ -12,7 +12,7 @@ conda activate 08_tracking
 Install DeepCell and launch a jupyter notebook
 
 ```
-pip install deepcell
+pip install git+https://github.com/vanvalenlab/deepcell-tf.git@update-tracking-app-models
 jupyter notebook
 ```
 
