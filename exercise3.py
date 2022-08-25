@@ -101,7 +101,7 @@ def preprocess(X, Y, axis_norm=(0,1)):
 # %% [markdown]
 # For this exercise we will be working with an even smaller crop of the dataset we have already used in the tracking exercise 1.
 #
-# It is a fluorenscence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA), originally from https://zenodo.org/record/4034976#.YwZRCJPP1qt.
+# It is a fluorenscence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA), similar to the dataset at  https://zenodo.org/record/4034976#.YwZRCJPP1qt.
 
 # %%
 base_path = Path("data/exercise3")

@@ -4,6 +4,8 @@
 1. Install environment on your virtual machine (CPU-only, no GPU needed for this exercise): `conda env create -f env_dlmbl_cpu.yml`.
 1. Activate the environment: `conda activate exercise08_tracking_cpu`.
 1. Launch "jupyter lab".
+1. Start `exercise{1|2|3}.ipynb`. You can ignore the corresponding `.py` files.
+1. Each exercise/section is collapsible by pressing the little arrow to the left of the respective cell.
 
 
 ## Exercises
@@ -26,7 +28,7 @@
     
     You will learn
     - how this formulation addresses **typical challenges of tracking in bioimages**, like cell division and objects temporarily going out of focus.
-    - How to use **Trackmate**, a versatile ready-to-go implementation of two-step LAP tracking in `ImageJ/Fiji`. TODO write notebook, link full dataset.
+    - How to use **Trackmate**, a versatile ready-to-go implementation of two-step LAP tracking in `ImageJ/Fiji`.
 
 
     

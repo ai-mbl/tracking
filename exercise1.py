@@ -30,7 +30,7 @@
 # Places where you are expected to write code are marked with ```YOUR CODE HERE```.
 
 # %% [markdown]
-# ![SegmentLocal](figures/trackmate-stardist-tracking.gif "segment")
+# ![](figures/tracking.gif "tracking")
 
 # %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true jp-MarkdownHeadingCollapsed=true tags=[]
 # ## Import packages
@@ -100,9 +100,7 @@ def preprocess(X, Y, axis_norm=(0,1)):
 # ## Inspect the dataset
 
 # %% [markdown]
-# For this exercise we will be working with a fluorenscence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA), originally from https://zenodo.org/record/4034976#.YwZRCJPP1qt.
-#
-# We will use a slightly modified version.
+# For this exercise we will be working with a fluorenscence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA). It is similar to the dataset at https://zenodo.org/record/4034976#.YwZRCJPP1qt.
 
 # %%
 base_path = Path("data/exercise1")
