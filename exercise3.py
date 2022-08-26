@@ -411,10 +411,10 @@ draw_graph(candidate_graph, "Candidate graph", ax=ax1, height=detections[0].shap
 # %% [markdown]
 # As hinted earlier, our goal is to prune the candidate graph. More formally we want to find a graph $\tilde{G}=(\tilde{V}, \tilde{E})$ whose vertices $\tilde{V}$ are a subset of the candidate graph vertices $V$ and whose edges $\tilde{E}$ are a subset of the candidate graph edges $E$.
 #
-# The first algorithm we will use to do this is a network flow (TODO link). It adds a source and a target vertex to the graph and tries to find as many disjunct paths from source to target as possible. All other vertices and edges are discarded. This specific algorithm is called maximum flow.
+# The first algorithm we will use to do this is a [network flow](https://en.wikipedia.org/wiki/Network_flow_problem). It adds a source and a target vertex to the graph and tries to find as many disjunct paths from source to target as possible. All other vertices and edges are discarded. This specific algorithm is called maximum flow.
 #
 #
-# Finding a good subgraph $\tilde{G}=(\tilde{V}, \tilde{E})$ can be formulated as an integer linear program (ILP) (TODO link, maybe a more general explanation), where we assign a binary variable $x$ and a cost $c$ to each vertex and edge in $G$, and then computing $min_c c^Tx$. A set of linear constraints ensure that the solution will be a feasible graph. For example, if an edge is part of $\tilde{G}$, both its incident nodes have to be part of $\tilde{G}$ as well.
+# Finding a good subgraph $\tilde{G}=(\tilde{V}, \tilde{E})$ can be formulated as an [integer linear program (ILP)](https://en.wikipedia.org/wiki/Integer_programming) (also, refer to the tracking lecture slides), where we assign a binary variable $x$ and a cost $c$ to each vertex and edge in $G$, and then computing $min_c c^Tx$. A set of linear constraints ensure that the solution will be a feasible graph. For example, if an edge is part of $\tilde{G}$, both its incident nodes have to be part of $\tilde{G}$ as well.
 #
 # Here we express the network flow as an ILP using `cvxpy`. We have already written two of the three constraints for you.
 
@@ -767,7 +767,7 @@ viewer.grid.enabled = True
 #
 # If you're unsure, you can refer to Malin-Mayor et al. (2021) for inspiration. But be aware that their whole formulation of the ILP is slightly different.
 #
-# TODO cite
+# [Malin-Mayor, Caroline, et al. "Automated reconstruction of whole-embryo cell lineages by learning from sparse annotations." bioRxiv (2021).](https://www.biorxiv.org/content/10.1101/2021.07.28.454016v1.abstract)
 
 # %%
 def graph2ilp_div(graph, hyperparams):
