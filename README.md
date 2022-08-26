@@ -34,7 +34,7 @@
     
 3. Tracking with an integer linear program (ILP)
 
-    Here we will introduce a modern formulation of tracking.
+    Here we will introduce a modern formulation of tracking-by-detection.
 
     You will learn
     - how linking with global context can be modeled as a **network flow** using `networkx` and solved efficiently as an **integer linear program (ILP)** with `cvxpy` for small-scale problems (Exercise 3.1).

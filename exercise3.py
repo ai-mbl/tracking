@@ -18,7 +18,7 @@
 #
 # You could also run this notebook on your laptop, a GPU is not needed :).
 #
-# Here we will introduce a more advanced formulation of tracking.
+# Here we will introduce a modern formulation of tracking-by-detection.
 #     
 # You will learn
 # - how linking with global context can be modeled as a **network flow** using `networkx` and solved efficiently as an **integer linear program (ILP)** with `cvxpy` for small-scale problems (Exercise 3.1).
@@ -99,7 +99,7 @@ def preprocess(X, Y, axis_norm=(0,1)):
 # ## Inspect the dataset
 
 # %% [markdown]
-# For this exercise we will be working with an even smaller crop of the dataset we have already used in the tracking exercise 1.
+# For this exercise we will be working with an even smaller crop of the dataset we have already used in the tracking exercises 1 and 2.
 #
 # It is a fluorenscence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA), similar to the dataset at  https://zenodo.org/record/4034976#.YwZRCJPP1qt.
 
@@ -128,9 +128,6 @@ x, y = preprocess(x, y)
 # %%
 idx = 0
 plot_img_label(x[idx], y[idx])
-
-# %% [markdown]
-# This is ok to take a glimpse, but a dynamic viewer would be much better. Let's use [napari](https://napari.org/tutorials/fundamentals/getting_started.html) for this.
 
 # %%
 viewer = napari.Viewer()
@@ -185,12 +182,9 @@ visualize_tracks(viewer, y, links.to_numpy(), "ground_truth");
 
 # %% [markdown] tags=[]
 # Load a pretrained stardist model, detect nuclei in one image and visualize them.
-#
-# We have trained a StarDist model on this dataset for you.
 
 # %%
 idx = 0
-# model = StarDist2D.from_pretrained("2D_versatile_fluo")
 model = StarDist2D(None, name="stardist_breast_cancer", basedir="models")
 (detections, details), (prob, _) = model.predict_instances(x[idx], scale=(1, 1), nms_thresh=0.3, prob_thresh=0.3, return_predict=True)
 plot_img_label(x[idx], detections, lbl_title="detections")
@@ -246,13 +240,23 @@ viewer.grid.enabled = True
 # ## Build a candidate graph from the detections
 
 # %% [markdown]
-# TODO write description
+#  $G = (V,E)$ 
 
 # %%
 def build_graph(detections, max_distance, detection_probs=None, drift=(0,0)):
-    """
+    """Builds a networkx graph from dense detection arrays.
     
+    Edge weights are drift-corrected euclidian distances of detection centroids.
+        
+    Args:
+        detections: list of dense 2D arrays.
+        max_distance (int): Only connect vertices whose distance is less than max_distance.
         detection_probs: list of arrays, corresponding to ordered ids in detections.
+        drift: Constant drift correction for each pair of frames.
+        
+    Returns:
+        A networkx directed graph,
+        A list of lookup tables that maps detections in each frame to global node ids.
     """
     G = nx.DiGraph()
     n_v = 0
@@ -301,7 +305,16 @@ def build_graph(detections, max_distance, detection_probs=None, drift=(0,0)):
 
 # %%
 def build_graph_from_tracks(detections, links=None):
-    """"""
+    """
+    
+    Args:
+        detections: list of dense 2D arrays.
+        links: (n, 4)-array with columns track_id, from, to, parent_id.
+        
+    Returns:
+        A networkx directed graph,
+        A list of lookup tables that maps detections in each frame to global node ids.
+    """
     G = nx.DiGraph()
     n_v = 0
     
@@ -325,12 +338,10 @@ def build_graph_from_tracks(detections, links=None):
         f0 = d0
         r0 = skimage.measure.regionprops(f0)
         c0 = [np.array(r.centroid) for r in r0]
-        # print(c0)
 
         f1 = d1
         r1 = skimage.measure.regionprops(f1)
         c1 = [np.array(r.centroid) for r in r1]
-        # print(c1)
 
         for _r0, _c0 in zip(r0, c0):
             for _r1, _c1 in zip(r1, c1):
@@ -350,17 +361,20 @@ def build_graph_from_tracks(detections, links=None):
             if d[1] > 0 and d[1] < detections.shape[0]:
                 try:
                     G.add_edge(luts[d[1] - 1][d[3]], luts[d[1]][d[0]])
-                    # print("Division edge")
                 except KeyError:
                     pass
-                    # print(d)
-                    # print("Can't find parent in previous frame (cropping, disappearing tracks).")
     
     return G, luts
 
 
 # %%
 def draw_graph(g, title=None, ax=None, height=None):
+    """
+    Args:
+        g: networkx Graph.
+        title: plot title.
+    
+    """
     pos = {i: g.nodes[i]["draw_position"] for i in g.nodes}
     if ax is None:
         _, ax = plt.subplots()
@@ -377,9 +391,9 @@ def draw_graph(g, title=None, ax=None, height=None):
 
 
 # %% [markdown]
-# We compare the candidate graph to the ground truth graph to get a rough idea
+# We compare the candidate graph to the ground truth graph. Note that the vertical position of each node corresponds to the vertical position of the detection in the image (in napari).
 #
-# TODO description
+# The candidate graph has both more edges and more nodes than the ground truth graph. Now we need an algorithm to prune the candidate graph.
 
 # %%
 gt_graph, gt_luts = build_graph_from_tracks(y, links.to_numpy())
@@ -395,13 +409,19 @@ draw_graph(candidate_graph, "Candidate graph", ax=ax1, height=detections[0].shap
 # ## Network flow
 
 # %% [markdown]
-# TODO description
+# As hinted earlier, our goal is to prune the candidate graph. More formally we want to find a graph $\tilde{G}=(\tilde{V}, \tilde{E})$ whose vertices $\tilde{V}$ are a subset of the candidate graph vertices $V$ and whose edges $\tilde{E}$ are a subset of the candidate graph edges $E$.
+#
+# The first algorithm we will use to do this is a network flow (TODO link). It adds a source and a target vertex to the graph and tries to find as many disjunct paths from source to target as possible. All other vertices and edges are discarded. This specific algorithm is called maximum flow.
+#
+#
+# Finding a good subgraph $\tilde{G}=(\tilde{V}, \tilde{E})$ can be formulated as an integer linear program (ILP) (TODO link, maybe a more general explanation), where we assign a binary variable $x$ and a cost $c$ to each vertex and edge in $G$, and then computing $min_c c^Tx$. A set of linear constraints ensure that the solution will be a feasible graph. For example, if an edge is part of $\tilde{G}$, both its incident nodes have to be part of $\tilde{G}$ as well.
+#
+# Here we express the network flow as an ILP using `cvxpy`. We have already written two of the three constraints for you.
 
 # %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 3.1
 # <div class="alert alert-block alert-info"><h3>Exercise 3.1: Write the flow constraint of the network flow</h3>
-#     
-# TODO precise instructions   
+# In words, this means that if a node in $\tilde{G}$ has an incoming edge, it must also have an outgoing edge. Don't forget the edges to the source and target nodes. The flow constraint does not apply to the source and target nodes.
 # </div>
 
 # %%
@@ -435,7 +455,6 @@ def graph2ilp_flow(graph, hyperparams):
     c_v = hyperparams["node_offset"] + hyperparams["node_factor"] * np.array([v for k, v in graph.nodes(data="weight")])
     c_e_flow = hyperparams["edge_factor"] * np.array([graph_flow.get_edge_data(*e)["weight"] for e in graph_flow.edges])  # weight set to 0 above
     
-    # print(c_v)
     c = np.concatenate([c_e, c_v, c_e_flow])
     
     # constraint matrices: {E or V} x (E + V + E_flow)
@@ -542,7 +561,16 @@ draw_graph(solved_graph_flow, f"Network flow (no divisions) - cost: {ilp_flow.va
 
 # %%
 def recolor_detections(detections, graph, node_luts):
-    """TODO cleanup"""
+    """
+    Args:
+        detections: list of dense 2d integer arrays.
+        graph: networkx graph.
+        node_luts: List of lookup tables from detections in each frame to global node ids.
+    
+    Returns
+    
+        array with consistently index detections according to the input graph.
+    """
     assert len(detections) == len(node_luts)
     
     out = []
@@ -550,25 +578,20 @@ def recolor_detections(detections, graph, node_luts):
     color_lookup_tables = []
     
     for t in tqdm(range(0, len(detections)), desc="Recoloring detections"):
-        # print(f"Time {t}")
         new_frame = np.zeros_like(detections[t])
         color_lut = {}
         for det_id, node_id in node_luts[t].items():
             if node_id not in graph.nodes:
                 continue
-            # print(node_id)
             edges = graph.in_edges(node_id)
             if not edges:
                 new_frame[detections[t] == graph.nodes[node_id]["detection_id"]] = n_tracks
                 color_lut[graph.nodes[node_id]["detection_id"]] = n_tracks
-                # print("new node")
-                # print(color_lut)
                 n_tracks += 1
             else:
                 for v_tm1, u_t0 in edges:
                     new_frame[detections[t] == graph.nodes[u_t0]["detection_id"]] = color_lookup_tables[t-1][graph.nodes[v_tm1]["detection_id"]]
                     color_lut[graph.nodes[u_t0]["detection_id"]] = color_lookup_tables[t-1][graph.nodes[v_tm1]["detection_id"]]
-                    # print(color_lut)
                 
         color_lookup_tables.append(color_lut)
         out.append(new_frame)
@@ -599,8 +622,7 @@ viewer.grid.enabled = True
 # %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 3.2
 # <div class="alert alert-block alert-info"><h3>Exercise 3.2: Extend the network flow from Exercise 3.1 such that tracks can start and end at arbitrary time points.</h3>
-#     
-# TODO instructions
+# The code is very similar to exercise 3.1. This time all constraints are already given.  
 # </div>
 
 # %%
@@ -738,14 +760,14 @@ viewer.grid.enabled = True
 # %% [markdown] jp-MarkdownHeadingCollapsed=true tags=[]
 # ## Exercise 3.3
 # <div class="alert alert-block alert-info"><h3>Exercise 3.3: Complete yet another extension of the ILP such that it allows for cell divisions.</h3>
-#     
-# Specifically, add constraint A3 (split constraint). Think about why this is needed.
-#  
-# TODO: description
-#     
-# The formulation is adapted from Malin-Mayor, Caroline, et al. "Automated reconstruction of whole-embryo cell lineages by learning from sparse annotations." bioRxiv (2021).
-#     
+# The constraint matrices A0, A1 and A2 are identical to Exercise 3.2, with the important difference that A1 and A2 are changed to inequality constraints here.
+# This model needs one more constraint to lead to feasible solutions, we call it the *split constraint*.
+# Please write the final constraint and think about why it is needed.
 # </div>
+#
+# If you're unsure, you can refer to Malin-Mayor et al. (2021) for inspiration. But be aware that their whole formulation of the ILP is slightly different.
+#
+# TODO cite
 
 # %%
 def graph2ilp_div(graph, hyperparams):
@@ -795,7 +817,6 @@ def graph2ilp_div(graph, hyperparams):
         for edge in graph.in_edges(node):
             edge_id = edge_to_idx[edge]
             A1[node, edge_id] = -1
-        # Edge from appear to node    
         if node in graph_flow.nodes:
             for edge in graph_flow.in_edges(node):
                 edge_id = edge_to_idx_flow[edge]
@@ -804,7 +825,6 @@ def graph2ilp_div(graph, hyperparams):
         for edge in graph.out_edges(node):
             edge_id = edge_to_idx[edge]
             A1[node, edge_id] = -1
-        # Edge from node to death
         if node in graph_flow.nodes:
             for edge in graph_flow.out_edges(node):
                 edge_id = edge_to_idx_flow[edge]
@@ -815,8 +835,7 @@ def graph2ilp_div(graph, hyperparams):
     for node in graph.nodes:
         for edge in graph.in_edges(node):
             edge_id = edge_to_idx[edge]
-            A2[node, edge_id] = 1
-        
+            A2[node, edge_id] = 1   
         if node in graph_flow.nodes:
             for edge in graph_flow.in_edges(node):
                 edge_id = edge_to_idx_flow[edge]
@@ -825,14 +844,13 @@ def graph2ilp_div(graph, hyperparams):
             
         for edge in graph.out_edges(node):
             edge_id = edge_to_idx[edge]
-            A2[node, edge_id] = -1
-         
+            A2[node, edge_id] = -1      
         if node in graph_flow.nodes:
             for edge in graph_flow.out_edges(node):
                 edge_id = edge_to_idx_flow[edge]
                 A2[node, E + V + edge_id] = -1
     
-    # At most 2 outgoing edges
+    # split constraint
     A3 = np.zeros((V, E + V + E_flow))
     
     ### YOUR CODE HERE ###
