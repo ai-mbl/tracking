@@ -216,8 +216,13 @@ visualize_divisions(viewer, y, links.to_numpy());
 # %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
 # ## Object detection using a pre-trained neural network
 
-# %% [markdown] tags=[]
-# ### Load a pretrained stardist model, detect nuclei in one image and visualize them.
+# %% [markdown]
+# StarDist (Schmidt et al. (2018) is a robust deep-learning based detection algorithm for cell nuclei. It represents objects as star-convex polygons, which in turn can be represented by a center point and distances along predefined rays going out from the center point.
+# Please refer to the paper for details.
+#
+# We will load a pretraine StarDist model to detect the nuclei in each frame.
+#
+# [Schmidt, Uwe, et al. "Cell detection with star-convex polygons." MICCAI, 2018.](https://link.springer.com/chapter/10.1007/978-3-030-00934-2_30)
 
 # %% tags=[]
 idx = 0
@@ -226,9 +231,7 @@ model = StarDist2D.from_pretrained("2D_versatile_fluo")
 plot_img_label(x[idx], detections, lbl_title="detections")
 
 # %% [markdown]
-# Here we visualize in detail the polygons we have detected with StarDist. TODO some description on how StarDist works.
-#
-# <!-- Notice that each object comes with a center point, which we can use to compute pairwise euclidian distances between objects. -->
+# Here we visualize in detail the polygons we have detected with StarDist.
 
 # %%
 coord, points, polygon_prob = details['coord'], details['points'], details['prob']
@@ -251,7 +254,7 @@ plt.show()
 # Explore the following aspects of the detection algorithm:     
 # - The `scale` parameter of the function `predict_instances` downscales (< 1) or upscales (> 1) the images by the given factor before feeding them to the neural network. How do the detections change if you adjust it?
 # - Inspect false positive and false negative detections. Do you observe patterns?
-# - So far we have used a StarDist off the shelf. Luckily, we also have a StarDist model that was trained on a subset of this breast cancer cells dataset (from https://zenodo.org/record/4034976#.Yv-aNPFBzao). Load it with `model = StarDist2D(None, name="stardist_breast_cancer", basedir="models")` and qualitatively observe differences.
+# - So far we have used a StarDist model off the shelf. Luckily, we also have a StarDist model that was trained on a very similar breast cancer cell dataset (from https://zenodo.org/record/4034976#.Yv-aNPFBzao). Load it with `model = StarDist2D(None, name="stardist_breast_cancer", basedir="models")` and qualitatively observe differences.
 #
 # </div>
 
@@ -295,7 +298,11 @@ plt.show();
 # %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true tags=[] jp-MarkdownHeadingCollapsed=true
 # ## Greedy linking by nearest neighbor
 #
-# TODO write introduction text.
+# The detections in each frame now need to be linked in time to form tracks. In the following exercises, we will explore different ways of doing this.
+#
+# We will start with the simplest algorithm: We take a pair of adjacent frames and compute a distance function between each detection $p \in P$ in frame $t$ and each detection $q \in Q$ in frame $t+1$. For example, we can calculate the euclidian distance between the two centroids of detections. This can be written as a matrix of size $|P| \times |Q|$.
+#
+# We want to minimize the total distance of the links we assign. A *greedy* (locally optimal) algorithm to do so is iteratively linking detections with the minimum distance that remains in the matrix.
 
 # %% [markdown]
 # ## Exercise 1.3
@@ -324,7 +331,7 @@ assert np.allclose(dists, np.load("points.npz")["dists_green_cyan"])
 
 # %% [markdown]
 # ## Exercise 1.4
-# <div class="alert alert-block alert-info"><h3>Exercise 1.4: Write a function that greedily extracts a nearest neighbors assignment given a cost matrix.</h3></div>
+# <div class="alert alert-block alert-info"><h3>Exercise 1.4: Write a function that greedily extracts a nearest neighbor assignment given a cost matrix.</h3></div>
 
 # %%
 def nearest_neighbor(cost_matrix):
@@ -705,24 +712,32 @@ visualize_tracks(viewer, drift_tracks, name="drift");
 # %% [markdown] tags=[]
 # ## Optimal frame-by-frame matching (*Linear assignment problem* or *Weighted bipartite matching*)
 
-# %% [markdown] jp-MarkdownHeadingCollapsed=true tags=[]
-# ## Exercise 1.7
-# <div class="alert alert-block alert-info"><h3>Exercise 1.7: Perform optimal frame-by-frame linking</h3>
+# %% [markdown]
+# The nearest neighbor algorithm above will not pick the best solution in many cases. For example, it does not consider the local arrangement of a few detections to create links, something which the human visual system is very good at.
 #
-# Set up the cost matrix such that you can use [`scipy.optimize.linear_sum_assignment`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html) to solve the matching problem in the bipartite graph.
-#     
-# </div>
+# We need a better optimization algorithm to minimize the total minimal linking distance between two frames. To use a classic and efficient optimization algorithm, we will represent this linking problem as a bipartite graph. Here is an example:
+#
+# <img src="figures/bipartite_graph.png" width="300"/>
+#
+# Red vertices correspond to detections in frame $t$, blue vertices to detections in frame $t+1$. Since we know that we don't want to link a detection to another one from the same frame, possible edges only connect blue vertices to red vertices, but not within each set.
+#
+# We can also put weights on the edges, which correspond the distanes we have calculated. The task is now to prune the edges of this graph such that each vertex has at most one incident edge. This is called a *weighted bipartite matching* or *linear assignment problem (LAP)*.
 
 # %% [markdown]
-# TODO write intro text.
-#
-#
-# TODO insert image for bipartite matching
+# In the seminal tracking algorithm proposed by Jaqaman et al. (2008), the bipartite matching additionally includes cost for not linking a vertex. An unlinked vertex from frame $t$ corresponds to the death of a cell, an unlinked vertex from frame $t+1$ to the birth of a cell. Here is the cost matrix in detail:
 #
 # <img src="figures/LAP_cost_matrix.png" width="300"/>
 #
 #
-# from Jaqaman, Khuloud, et al. "Robust single-particle tracking in live-cell time-lapse sequences." Nature Methods (2008)
+# from [Jaqaman, Khuloud, et al. "Robust single-particle tracking in live-cell time-lapse sequences." Nature Methods (2008)](https://www.nature.com/articles/nmeth.1237)
+
+# %% [markdown] jp-MarkdownHeadingCollapsed=true tags=[]
+# ## Exercise 1.7
+# <div class="alert alert-block alert-info"><h3>Exercise 1.7: Perform optimal frame-by-frame linking</h3>
+#
+# Set up the cost matrix following Jaqaman et al. (2008) such that you can use [`scipy.optimize.linear_sum_assignment`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html) to solve the matching problem in the bipartite graph.
+#     
+# </div>
 
 # %%
 class BipartiteMatchingLinker(FrameByFrameLinker):
