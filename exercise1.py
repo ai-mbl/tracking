@@ -109,33 +109,29 @@ base_path = Path("data/exercise1")
 # Load the dataset (images and tracking annotations) from disk into this notebook.
 
 # %%
-x = np.stack([imread(xi) for xi in sorted((base_path / "images").glob("*.tif"))])
-y = np.stack([imread(yi) for yi in sorted((base_path / "gt_tracking").glob("*.tif"))])
-assert len(x) == len(y)
+x = np.stack([imread(xi) for xi in sorted((base_path / "images").glob("*.tif"))])  # images
+y = np.stack([imread(yi) for yi in sorted((base_path / "gt_tracking").glob("*.tif"))])  # ground truth annotations
+assert x.shape == y.shape
 print(f"Number of images: {len(x)}")
-print(f"Image shape: {x[0].shape}")
-links = np.loadtxt(base_path / "gt_tracking" / "man_track.txt", dtype=int)
-links = pd.DataFrame(data=links, columns=["track_id", "from", "to", "parent_id"])
-print("Links")
-links[:10]
-
-# %%
+print(f"Shape of images: {x[0].shape}")
 x, y = preprocess(x, y)
 
 # %% [markdown]
-# Visualize some images (by changing `idx`).
+# Let's visualize some images (by changing `idx`).
 
 # %%
 idx = 0
 plot_img_label(x[idx], y[idx])
 
 # %% [markdown]
-# This is ok to take a glimpse, but a dynamic viewer would be much better. Let's use [napari](https://napari.org/tutorials/fundamentals/getting_started.html) for this.
+# This is ok to take a glimpse, but a dynamic viewer would be much better to understand how cells move. Let's use [napari](https://napari.org/tutorials/fundamentals/getting_started.html) for this. Napari is a wonderful viewer for imaging data that you can interact with in python, even directly out of jupyter notebooks.
 
 # %%
 viewer = napari.Viewer()
 viewer.add_image(x, name="image");
 
+# %% [markdown]
+# If you've never used napari, you might want to take a few minutes to go through [this tutorial](https://napari.org/stable/tutorials/fundamentals/viewer.html).
 
 # %% [markdown]
 # <div class="alert alert-block alert-danger"><h3>Napari in a jupyter notebook:</h3>
@@ -146,9 +142,36 @@ viewer.add_image(x, name="image");
 # </div>
 
 # %% [markdown]
-# Let's add the ground truth annotations. Now we can easily explore how the cells move over time.
+# Let's add the ground truth annotations. 
+
+# %%
+viewer.add_labels(y, name="labels");
+
+# %% [markdown]
+# Now it is easy to see that the nuclei have consistent IDs (visualized as random colors) over time.
 #
-# If you zoom in, you will note that the dense annotations are not perfect segmentations, but rather circles placed roughly in the center of each nucleus.
+# If you zoom in, you will note that the annotations are not perfect segmentations, but rather circles placed roughly in the center of each nucleus.
+#
+# If you look carefully, you will see that there are some cell divisions in this dataset, and the annotation color of the daughter cells does not match the color of the parent cell. This information is stored in an additional table, which we will load now.
+
+# %%
+links = np.loadtxt(base_path / "gt_tracking" / "man_track.txt", dtype=int)
+links = pd.DataFrame(data=links, columns=["track_id", "from", "to", "parent_id"])
+print("Links")
+links[:10]
+
+
+# %% [markdown]
+# Each row in this table describes a daughter cell track:
+# - it has a unique identifier *track_id*
+# - it starts in frame *from*
+# - it ends in frame *to*
+# - it has a parent cell ID *parent_id*
+#
+# This is the standard data format of the [Cell Tracking Challenge](http://celltrackingchallenge.net) ([Ulman et al. (2017)](https://www.nature.com/articles/nmeth.4473])).
+
+# %% [markdown]
+# Here is a function to visualize the tracks of cells over time, including cell divisions. Note that the color of the track is also random and does not match the color of the corresponding spot.
 
 # %%
 def visualize_tracks(viewer, y, links=None, name=""):
@@ -178,6 +201,11 @@ def visualize_tracks(viewer, y, links=None, name=""):
 
 
 # %%
+viewer = napari.viewer.current_viewer()
+if viewer:
+    viewer.close()
+viewer = napari.Viewer()
+viewer.add_image(x)
 visualize_tracks(viewer, y, links.to_numpy(), "ground_truth");
 
 
@@ -309,7 +337,7 @@ plt.show();
 # <div class="alert alert-block alert-info"><h3>Exercise 1.3: Write a function that computes pairwise euclidian distances given two lists of points.</h3></div>
 
 # %%
-def euclidian_distance(points0, points1):
+def pairwise_euclidian_distance(points0, points1):
     dists = np.zeros((len(points0), len(points1)))
     
     ### YOUR CODE HERE ###
