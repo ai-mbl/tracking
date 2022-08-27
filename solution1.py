@@ -86,17 +86,11 @@ def preprocess(X, Y, axis_norm=(0,1)):
 base_path = Path("data/exercise1")
 
 # %%
-x = np.stack([imread(xi) for xi in sorted((base_path / "images").glob("*.tif"))])
-y = np.stack([imread(yi) for yi in sorted((base_path / "gt_tracking").glob("*.tif"))])
-assert len(x) == len(y)
+x = np.stack([imread(xi) for xi in sorted((base_path / "images").glob("*.tif"))])  # images
+y = np.stack([imread(yi) for yi in sorted((base_path / "gt_tracking").glob("*.tif"))])  # ground truth annotations
+assert x.shape == y.shape
 print(f"Number of images: {len(x)}")
-print(f"Image shape: {x[0].shape}")
-links = np.loadtxt(base_path / "gt_tracking" / "man_track.txt", dtype=int)
-links = pd.DataFrame(data=links, columns=["track_id", "from", "to", "parent_id"])
-print("Links")
-links[:10]
-
-# %%
+print(f"Shape of images: {x[0].shape}")
 x, y = preprocess(x, y)
 
 # %%
@@ -107,7 +101,6 @@ plot_img_label(x[idx], y[idx])
 viewer = napari.Viewer()
 viewer.add_image(x, name="image");
 
-
 # %% [markdown]
 # <div class="alert alert-block alert-danger"><h3>Napari in a jupyter notebook:</h3>
 #     
@@ -115,6 +108,16 @@ viewer.add_image(x, name="image");
 # - When you are coding and debugging, close the napari viewer with `viewer.close()` to avoid problems with the two event loops of napari and jupyter.
 # - **If a cell is not executed (empty square brackets on the left of a cell) despite you running it, running it a second time right after will usually work.**
 # </div>
+
+# %%
+viewer.add_labels(y, name="labels");
+
+# %%
+links = np.loadtxt(base_path / "gt_tracking" / "man_track.txt", dtype=int)
+links = pd.DataFrame(data=links, columns=["track_id", "from", "to", "parent_id"])
+print("Links")
+links[:10]
+
 
 # %%
 def visualize_tracks(viewer, y, links=None, name=""):
@@ -144,6 +147,11 @@ def visualize_tracks(viewer, y, links=None, name=""):
 
 
 # %%
+viewer = napari.viewer.current_viewer()
+if viewer:
+    viewer.close()
+viewer = napari.Viewer()
+viewer.add_image(x)
 visualize_tracks(viewer, y, links.to_numpy(), "ground_truth");
 
 
