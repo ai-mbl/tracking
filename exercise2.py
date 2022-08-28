@@ -119,7 +119,8 @@
 
 # %% [markdown]
 # First, we will run the `Simple LAP tracker`. We set
-# - `Gap-closing max distance: 0` and 
+# - `Max linking distance: 50`
+# - `Gap-closing max distance: 0` 
 # - `Gap-closing max frame gap: 0`
 #
 # and run the linking.
