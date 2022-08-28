@@ -161,8 +161,8 @@ visualize_tracks(viewer, y, links.to_numpy(), "ground_truth");
 
 # %%
 # Solution Exercise 1.1
-def visualize_divisions(viewer, y, links):
-    """Utility function to visualize divisions"""
+def extract_divisions(y, links):
+    """Utility function to extract divisions"""    
     daughters = links[links[:,3] != 0]
     divisions = np.zeros_like(y)
 
@@ -170,13 +170,37 @@ def visualize_divisions(viewer, y, links):
         if d[0] not in y or d[3] not in y:
             continue
         divisions[d[1]][y[d[1]] == d[0]] = d[0]
-                
-    viewer.add_labels(divisions, name="divisions")
+ 
     return divisions
 
 
+# %% [markdown]
+# Feel free to test your function with this minimal example (with toy "images" in 1D).
+
 # %%
-visualize_divisions(viewer, y, links.to_numpy());
+def test_extract_divisions():
+    y = np.array([[0, 10, 0, 0], [0, 11, 12, 13], [0, 11, 12, 13], [0, 11, 0, 13]])
+    links = pd.DataFrame([[11, 1, 2, 10], [12, 1, 3, 10]], columns=["track_id", "from", "to", "parent_id"])
+    divs = extract_divisions(y, links.to_numpy())
+    expected_divs = np.array([[0, 0, 0, 0], [0, 11, 12, 0], [0, 0, 0, 0], [0, 0, 0, 0]])
+    if np.all(divs == expected_divs):
+        print("Success :)")
+    else:
+        print(f"Output {divs} does not match expected output\n{expected_divs}")
+
+test_extract_divisions()
+
+# %% [markdown]
+# Visualize the output of your function:
+
+# %%
+viewer = napari.viewer.current_viewer()
+if viewer:
+    viewer.close()
+viewer = napari.Viewer()
+viewer.add_image(x)
+divisions = extract_divisions(y, links.to_numpy())
+viewer.add_labels(divisions, name="divisions");
 
 # %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
 # ## Object detection using a pre-trained neural network
@@ -801,5 +825,7 @@ if viewer:
 viewer = napari.Viewer()
 viewer.add_image(x)
 visualize_tracks(viewer, bm_tracks, name="bm");
+
+# %%
 
 # %%

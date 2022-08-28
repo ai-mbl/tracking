@@ -228,18 +228,47 @@ visualize_tracks(viewer, y, links.to_numpy(), "ground_truth");
 # </figure>
 
 # %%
-def visualize_divisions(viewer, y, links):
-    """Utility function to visualize divisions"""
+def extract_divisions(y, links):
+    """Utility function to extract divisions"""
+    divisions = np.zeros_like(y)
     
     ### YOUR CODE HERE ###
     
-    divisions = np.zeros_like(y)
-    viewer.add_labels(divisions, name="divisions")
     return divisions
 
 
+# %% [markdown]
+# Feel free to test your function with this minimal example (with toy "images" in 1D).
+
 # %%
-visualize_divisions(viewer, y, links.to_numpy());
+def test_extract_divisions():
+    y = np.array([
+        [0, 10, 0, 0],
+        [0, 11, 12, 13],
+        [0, 11, 12, 13],
+        [0, 11, 0, 13]
+    ])
+    links = pd.DataFrame([[11, 1, 2, 10], [12, 1, 3, 10]], columns=["track_id", "from", "to", "parent_id"])
+    divs = extract_divisions(y, links.to_numpy())
+    expected_divs = np.array([[0, 0, 0, 0], [0, 11, 12, 0], [0, 0, 0, 0], [0, 0, 0, 0]])
+    if np.all(divs == expected_divs):
+        print("Success :)")
+    else:
+        print(f"Output\n{divs}\ndoes not match expected output\n{expected_divs}")
+
+test_extract_divisions()
+
+# %% [markdown]
+# Visualize the output of your function:
+
+# %%
+viewer = napari.viewer.current_viewer()
+if viewer:
+    viewer.close()
+viewer = napari.Viewer()
+viewer.add_image(x)
+divisions = extract_divisions(y, links.to_numpy())
+viewer.add_labels(divisions, name="divisions");
 
 # %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
 # ## Object detection using a pre-trained neural network
@@ -616,7 +645,10 @@ class NearestNeighborLinkerEuclidian(FrameByFrameLinker):
         
             m x n cost matrix 
         """
+        
         ### YOUR CODE HERE ###
+        # Extract centroids from detections, then apply your function from Exercise 1.3
+        
         dists = np.zeros((detections0.max(), detections1.max()))
         
         return dists
