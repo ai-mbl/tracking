@@ -153,7 +153,6 @@ visualize_tracks(viewer, y, links.to_numpy(), "ground_truth");
 
 # %%
 idx = 0
-# model = StarDist2D.from_pretrained("2D_versatile_fluo")
 model = StarDist2D(None, name="stardist_breast_cancer", basedir="models")
 (detections, details), (prob, _) = model.predict_instances(x[idx], scale=(1, 1), nms_thresh=0.3, prob_thresh=0.3, return_predict=True)
 plot_img_label(x[idx], detections, lbl_title="detections")
@@ -275,12 +274,10 @@ def build_graph_from_tracks(detections, links=None):
         f0 = d0
         r0 = skimage.measure.regionprops(f0)
         c0 = [np.array(r.centroid) for r in r0]
-        # print(c0)
 
         f1 = d1
         r1 = skimage.measure.regionprops(f1)
         c1 = [np.array(r.centroid) for r in r1]
-        # print(c1)
 
         for _r0, _c0 in zip(r0, c0):
             for _r1, _c1 in zip(r1, c1):
@@ -300,11 +297,8 @@ def build_graph_from_tracks(detections, links=None):
             if d[1] > 0 and d[1] < detections.shape[0]:
                 try:
                     G.add_edge(luts[d[1] - 1][d[3]], luts[d[1]][d[0]])
-                    # print("Division edge")
                 except KeyError:
                     pass
-                    # print(d)
-                    # print("Can't find parent in previous frame (cropping, disappearing tracks).")
     
     return G, luts
 
@@ -341,7 +335,7 @@ draw_graph(candidate_graph, "Candidate graph", ax=ax1, height=detections[0].shap
 
 # %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true tags=[] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 3.1
-# <div class="alert alert-block alert-info"><h3>Exercise 3.1: Write the flow constraint of the network flow</h3></div>
+# <div class="alert alert-block alert-info"><h3>Exercise 3.1: Set the correct constraint values for the flow constraint</h3></div>
 
 # %%
 # Solution Exercise 3.1
@@ -375,7 +369,7 @@ def graph2ilp_flow(graph, hyperparams):
     
     c_e = hyperparams["edge_factor"] * np.array([graph.get_edge_data(*e)["weight"] for e in graph.edges])
     c_v = hyperparams["node_factor"] * np.array([v for k, v in graph.nodes(data="weight")])
-    c_e_flow = hyperparams["edge_factor"] * np.array([graph_flow.get_edge_data(*e)["weight"] for e in graph_flow.edges])  # weight set to 0 above
+    c_e_flow = np.array([graph_flow.get_edge_data(*e)["weight"] for e in graph_flow.edges])  # weight set to 0 above
     
     # print(c_v)
     c = np.concatenate([c_e, c_v, c_e_flow])
@@ -497,7 +491,7 @@ draw_graph(solved_graph_flow, f"Network flow (no divisions) - cost: {ilp_flow.va
 
 # %%
 def recolor_detections(detections, graph, node_luts):
-    """TODO cleanup"""
+    """."""
     assert len(detections) == len(node_luts)
     
     out = []
@@ -505,25 +499,20 @@ def recolor_detections(detections, graph, node_luts):
     color_lookup_tables = []
     
     for t in tqdm(range(0, len(detections)), desc="Recoloring detections"):
-        # print(f"Time {t}")
         new_frame = np.zeros_like(detections[t])
         color_lut = {}
         for det_id, node_id in node_luts[t].items():
             if node_id not in graph.nodes:
                 continue
-            # print(node_id)
             edges = graph.in_edges(node_id)
             if not edges:
                 new_frame[detections[t] == graph.nodes[node_id]["detection_id"]] = n_tracks
                 color_lut[graph.nodes[node_id]["detection_id"]] = n_tracks
-                # print("new node")
-                # print(color_lut)
                 n_tracks += 1
             else:
                 for v_tm1, u_t0 in edges:
                     new_frame[detections[t] == graph.nodes[u_t0]["detection_id"]] = color_lookup_tables[t-1][graph.nodes[v_tm1]["detection_id"]]
                     color_lut[graph.nodes[u_t0]["detection_id"]] = color_lookup_tables[t-1][graph.nodes[v_tm1]["detection_id"]]
-                    # print(color_lut)
                 
         color_lookup_tables.append(color_lut)
         out.append(new_frame)
@@ -569,7 +558,6 @@ def graph2ilp_nodiv(graph, hyperparams):
     for n, time in graph.nodes(data="time"):
         graph_flow.add_node(n, weight=0)
         graph_flow.add_edge("appear", n, weight=hyperparams["cost_appear"])
-        graph_flow.add_node(n, weight=0)
         graph_flow.add_edge(n, "death", weight=hyperparams["cost_disappear"])
         
         
@@ -649,66 +637,6 @@ def graph2ilp_nodiv(graph, hyperparams):
     objective = cp.Minimize( c.T @ x)
 
     return cp.Problem(objective, constraints)
-
-# %%
-# Alternative formulation Exercise 3.2 following Malin-Mayor et al. (2021).
-
-# def graph2ilp_nodiv(graph, hyperparams):
-#     """TODO cleanup"""
-#     edge_to_idx = {edge: i for i, edge in enumerate(graph.edges)}
-#     E = graph.number_of_edges()
-#     V = graph.number_of_nodes()
-#     x = cp.Variable(E + 3*V, boolean=True)
-    
-#     c_e = hyperparams["edge_factor"] * np.array([graph.get_edge_data(*e)["weight"] for e in graph.edges])
-#     # print(c_e)
-#     c_v = hyperparams["node_factor"] * np.array([v for k, v in sorted(dict(graph.nodes(data="weight")).items())])
-#     # print(c_v)
-#     c_va = np.ones(V) * hyperparams["cost_appear"]
-#     c_vd = np.ones(V) * hyperparams["cost_disappear"]
-#     c = np.concatenate([c_e, c_v, c_va, c_vd])
-    
-#     # constraint matrices: {E or V} x (E + 3V)
-#     # columns: c_e, c_v, c_va, c_vd
-    
-#     A0 = np.zeros((E, E + 3 * V))
-#     A0[:E, :E] = 2 * np.eye(E)
-#     for edge in graph.edges:
-#         edge_id = edge_to_idx[edge]
-#         A0[edge_id, E + edge[0]] = -1
-#         A0[edge_id, E + edge[1]] = -1
-    
-#     # Appear continuation
-#     A1 = np.zeros((V, E + 3 * V))
-#     A1[:, E:E+V] = -np.eye(V)
-#     A1[:, E+V:E+2*V] = np.eye(V)
-    
-#     for node in graph.nodes:
-#         out_edges = graph.out_edges(node)
-#         for edge in out_edges:
-#             edge_id = edge_to_idx[edge]
-#             A1[node, edge_id] = 1
-     
-#     # Disappear continuation
-#     A2 = np.zeros((V, E + 3 * V))
-#     A2[:, E:E+V] = np.eye(V)
-#     A2[:, E+2*V:E+3*V] = - np.eye(V)
-    
-#     for node in graph.nodes:
-#         in_edges = graph.in_edges(node)
-#         for edge in in_edges:
-#             edge_id = edge_to_idx[edge]
-#             A2[node, edge_id] = -1
-    
-#     constraints = [
-#         A0 @ x <= 0, 
-#         A1 @ x == 0,
-#         A2 @ x == 0,
-#     ]   
-    
-#     objective = cp.Minimize( c.T @ x)
-    
-#     return cp.Problem(objective, constraints)
 
 # %%
 ilp_nodiv = graph2ilp_nodiv(candidate_graph, hyperparams={"cost_appear": 0.5, "cost_disappear": 0.5, "node_factor": -1, "edge_factor": 1})
@@ -869,80 +797,6 @@ def graph2ilp_div(graph, hyperparams):
     objective = cp.Minimize( c.T @ x)
     
     return cp.Problem(objective, constraints)
-
-# %%
-# # Malin-Mayor et al. (2021) formulation
-
-# def graph2ilp_div(graph, hyperparams):
-#     """TODO cleanup"""
-#     edge_to_idx = {edge: i for i, edge in enumerate(graph.edges)}
-#     E = graph.number_of_edges()
-#     V = graph.number_of_nodes()
-#     x = cp.Variable(E + 3*V, boolean=True)
-    
-#     c_e = hyperparams["edge_factor"] * np.array([graph.get_edge_data(*e)["weight"] for e in graph.edges])
-#     c_v = hyperparams["node_offset"] + hyperparams["node_factor"] * np.array([v for k, v in sorted(dict(graph.nodes(data="weight")).items())])
-
-#     c_va = np.ones(V) * hyperparams["cost_appear"]
-#     c_vd = np.ones(V) * hyperparams["cost_disappear"]
-    
-#     c = np.concatenate([c_e, c_v, c_va, c_vd])
-    
-#     # constraint matrices: {E or V} x (E + 3V)
-#     # columns: ce, c_v, c_va, c_vd
-    
-#     A0 = np.zeros((E, E + 3 * V))
-#     A0[:E, :E] = 2 * np.eye(E)
-#     for edge in graph.edges:
-#         edge_id = edge_to_idx[edge]
-#         A0[edge_id, E + edge[0]] = -1
-#         A0[edge_id, E + edge[1]] = -1
-    
-#     # Appear continuation
-#     A1 = np.zeros((V, E + 3 * V))
-#     A1[:, E:E+V] = -np.eye(V)
-#     A1[:, E+V:E+2*V] = np.eye(V)
-    
-#     for node in graph.nodes:
-#         in_edges = graph.in_edges(node)
-#         for edge in in_edges:
-#             edge_id = edge_to_idx[edge]
-#             A1[node, edge_id] = 1
-     
-#     # Disappear continuation
-#     A2 = np.zeros((V, E + 3 * V))
-#     A2[:, E:E+V] = np.eye(V)
-#     A2[:, E+2*V:E+3*V] = - np.eye(V)
-    
-#     for node in graph.nodes:
-#         out_edges = graph.out_edges(node)
-#         for edge in out_edges:
-#             edge_id = edge_to_idx[edge]
-#             A2[node, edge_id] = -1
-    
-#     # At most 2 outgoing edges
-#     A3 = np.zeros((V, E + 3*V))
-#     A3[:, E:E+V] = -2*np.eye(V)
-#     A3[:, E+2*V:E+3*V] = 2 * np.eye(V)
-    
-#     for node in graph.nodes:
-#         out_edges = graph.out_edges(node)
-#         for edge in out_edges:
-#             edge_id = edge_to_idx[edge]
-#             A3[node, edge_id] = 1
-    
-#     constraints = [
-#         A0 @ x <= 0, 
-#         A1 @ x == 0,
-#         A2 @ x <= 0,
-#         A3 @ x <= 0,
-#     ]
-    
-    
-#     objective = cp.Minimize( c.T @ x)
-
-    
-#     return cp.Problem(objective, constraints)
 
 # %%
 ilp_div = graph2ilp_div(candidate_graph, hyperparams={"cost_appear": 0.15, "cost_disappear": 0.5, "node_offset": 0, "node_factor": -1, "edge_factor": 0.4})

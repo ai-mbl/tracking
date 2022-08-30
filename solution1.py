@@ -307,7 +307,7 @@ assert np.allclose(dists, np.load("points.npz")["dists_green_cyan"])
 # %%
 # Solution exercise 1.4
 
-def nearest_neighbor(cost_matrix):
+def nearest_neighbor(cost_matrix, threshold=np.finfo(float).max):
     """Greedy nearest neighbor assignment.
     
     Each point in both sets can only be assigned once. 
@@ -320,12 +320,14 @@ def nearest_neighbor(cost_matrix):
 
         Tuple of lists (ids frame t, ids frame t+1).
     """
-    print("Iterative nearest neighbor")
     A = cost_matrix.copy().astype(float)
     ids_from = []
     ids_to = []
     for i in range(min(A.shape[0], A.shape[1])):
         row, col = np.unravel_index(A.argmin(), A.shape)
+        
+        if A.min() >= threshold:
+                break
         ids_from.append(row)
         ids_to.append(col)
         A[row, :] = cost_matrix.max() + 1
@@ -336,14 +338,14 @@ def nearest_neighbor(cost_matrix):
 
 # %%
 test_matrix = np.array([
-    [9, 2, 9],
+    [8, 2, 8],
     [9, 9, 9],
-    [1, 9, 9],
-    [9, 3, 9],
+    [1, 8, 8],
+    [8, 3, 8],
 ])
-idx_from, idx_to = nearest_neighbor(test_matrix)
-assert np.all(idx_from == [2, 0, 1])
-assert np.all(idx_to == [0, 1, 2])
+idx_from, idx_to = nearest_neighbor(test_matrix, threshold=8)
+assert np.all(idx_from == [2, 0])
+assert np.all(idx_to == [0, 1])
 
 
 # %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
@@ -369,9 +371,14 @@ class FrameByFrameLinker(ABC):
         
         Returns:
         
-            List of t linking dictionaries, each containing:
-                "links": Tuple of lists (ids frame t, ids frame t+1),
-                "births": List of ids,
+            Linking dictionary:
+                "links":
+                    
+                    Tuple of lists. Links from frame t to frame t+1 of form (from0, to0) are split up into two lists: 
+                    - idgs_from: [from0, from1 , ...])
+                    - ids_to: [to0, to1 , ...])
+                
+                "births": List of ids from frame t that are 
                 "deaths": List of ids.
             Ids are one-based, 0 is reserved for background.
         """
@@ -425,10 +432,15 @@ class FrameByFrameLinker(ABC):
 
         Returns:
         
-            Linking dictionary:
-                "links": Tuple of lists (ids frame t, ids frame t+1),
-                "births": List of ids,
-                "deaths": List of ids.
+            "links":
+
+                Tuple of lists. Links from frame t to frame t+1 of form (from0, to0) are split up into two lists: 
+                - idgs_from: [from0, from1 , ...])
+                - ids_to: [to0, to1 , ...])
+
+            "births": List of ids from frame t that are 
+            "deaths": List of ids.
+            
             Ids are one-based, 0 is reserved for background.
         """
         pass
@@ -528,7 +540,7 @@ class NearestNeighborLinkerEuclidian(FrameByFrameLinker):
         threshold (float): Maximum euclidian distance for linking.
     """
     
-    def __init__(self, threshold=sys.float_info.max, *args, **kwargs):
+    def __init__(self, threshold=np.finfo(float).max, *args, **kwargs):
         self.threshold = threshold
         super().__init__(*args, **kwargs)
     
@@ -570,28 +582,20 @@ class NearestNeighborLinkerEuclidian(FrameByFrameLinker):
             cost_matrix: m x n matrix containing pairwise linking costs of two sets of points.
 
         Returns:
-            Linking dictionary:
-                "links": Tuple of lists (ids frame t, ids frame t+1),
-                "births": List of ids,
-                "deaths": List of ids.
+            "links":
+
+                Tuple of lists. Links from frame t to frame t+1 of form (from0, to0) are split up into two lists: 
+                - idgs_from: [from0, from1 , ...])
+                - ids_to: [to0, to1 , ...])
+
+            "births": List of ids from frame t that are 
+            "deaths": List of ids.
+            
             Ids are one-based, 0 is reserved for background.
         """
-        A = cost_matrix.copy().astype(float)
-        ids_from = []
-        ids_to = []
-        for i in range(min(A.shape[0], A.shape[1])):
-            if A.min() >= self.threshold:
-                break
-            row, col = np.unravel_index(A.argmin(), A.shape)
-            ids_from.append(row)
-            ids_to.append(col)
-            A[row, :] = cost_matrix.max() + 1
-            A[:, col] = cost_matrix.max() + 1
-
-        ids_from = np.array(ids_from)
-        ids_to = np.array(ids_to)
-        births = np.array(list(set(range(A.shape[1])) - set(ids_to)))
-        deaths = np.array(list(set(range(A.shape[0])) - set(ids_from)))
+        ids_from, ids_to = nearest_neighbor(cost_matrix, self.threshold)
+        births = np.array(list(set(range(cost_matrix.shape[1])) - set(ids_to)))
+        deaths = np.array(list(set(range(cost_matrix.shape[0])) - set(ids_from)))
         
         # Account for +1 offset of the dense labels
         ids_from += 1
@@ -627,8 +631,6 @@ visualize_tracks(viewer, nn_tracks, name="nn");
 # <div class="alert alert-block alert-info"><h3>Exercise 1.6: Estimate the global drift of the data</h3></div>
 
 # %%
-# Solution Exercise 1.6
-
 class NearestNeighborLinkerDriftCorrection(NearestNeighborLinkerEuclidian):
     """.
     
@@ -640,7 +642,7 @@ class NearestNeighborLinkerDriftCorrection(NearestNeighborLinkerEuclidian):
     def __init__(self, drift, *args, **kwargs):
         self.drift = np.array(drift)
         super().__init__(*args, **kwargs)
-        
+    
     def linking_cost_function(self, detections0, detections1, image0=None, image1=None):
         """ Get centroids from detections and compute pairwise euclidian distances with drift correction.
                 
@@ -671,7 +673,7 @@ class NearestNeighborLinkerDriftCorrection(NearestNeighborLinkerEuclidian):
 
 
 # %%
-# Explore different values of `threshold` and `drift`
+# Solution Exercise 1.6
 drift_linker = NearestNeighborLinkerDriftCorrection(threshold=50, drift=(-20, 0)) # SOLUTION params
 drift_links = drift_linker.link(detections)
 drift_tracks = drift_linker.relabel_detections(detections, drift_links)
@@ -707,7 +709,7 @@ class BipartiteMatchingLinker(FrameByFrameLinker):
     
     def __init__(
         self,
-        threshold=sys.float_info.max,
+        threshold=np.finfo(float).max,
         drift=(0,0),
         birth_cost_factor=1.05,
         death_cost_factor=1.05,
@@ -757,11 +759,15 @@ class BipartiteMatchingLinker(FrameByFrameLinker):
             cost_matrix: m x n matrix.
 
         Returns:
-        
-            Linking dictionary:
-                "links": Tuple of lists (ids frame t, ids frame t+1),
-                "births": List of ids,
+            "links":
+    
+                Tuple of lists. Links from frame t to frame t+1 of form (from0, to0) are split up into two lists: 
+                    - idgs_from: [from0, from1 , ...])
+                    - ids_to: [to0, to1 , ...])
+                
+                "births": List of ids from frame t that are 
                 "deaths": List of ids.
+                
             Ids are one-based, 0 is reserved for background.
         """
         

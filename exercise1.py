@@ -388,10 +388,18 @@ assert np.allclose(dists, np.load("points.npz")["dists_green_cyan"])
 
 # %% [markdown]
 # ## Exercise 1.4
-# <div class="alert alert-block alert-info"><h3>Exercise 1.4: Write a function that greedily extracts a nearest neighbor assignment given a cost matrix.</h3></div>
+# <div class="alert alert-block alert-info"><h3>Exercise 1.4: Complete a function that greedily extracts a nearest neighbor assignment given a cost matrix.</h3>
+#
+# Test your function with the cell below.
+#     
+# Hints:
+# - Make sure links do not exceed the cost threshold.
+# - Once you've found the minimum in the matrix with the given code below (`row, col`), make sure that the row and column are not picked again in the next step.
+#     
+# </div>
 
 # %%
-def nearest_neighbor(cost_matrix):
+def nearest_neighbor(cost_matrix, threshold=np.finfo(float).max):
     """Greedy nearest neighbor assignment.
     
     Each point in both sets can only be assigned once. 
@@ -399,15 +407,20 @@ def nearest_neighbor(cost_matrix):
     Args:
 
         cost_matrix: m x n matrix with pairwise linking costs of two sets of points.
+        threshold (int): Maximal cost of links.  
 
     Returns:
 
         Determined matches as tuple of lists (ids_of_rows, ids_of_columns).
     """
 
+    A = cost_matrix.copy().astype(float)
     ids_from = []
     ids_to = []
     
+    for i in range(min(A.shape[0], A.shape[1])):
+        row, col = np.unravel_index(A.argmin(), A.shape)
+        
     ### YOUR CODE HERE ###
     
     return np.array(ids_from), np.array(ids_to)
@@ -418,12 +431,12 @@ def nearest_neighbor(cost_matrix):
 
 # %%
 test_matrix = np.array([
-    [9, 2, 9],
+    [8, 2, 8],
     [9, 9, 9],
-    [1, 9, 9],
-    [9, 3, 9],
+    [1, 8, 8],
+    [8, 3, 8],
 ])
-idx_from, idx_to = nearest_neighbor(test_matrix)
+idx_from, idx_to = nearest_neighbor(test_matrix, threshold=8)
 assert np.all(idx_from == [2, 0, 1])
 assert np.all(idx_to == [0, 1, 2])
 
@@ -432,10 +445,12 @@ assert np.all(idx_to == [0, 1, 2])
 # ## Exercise 1.5
 # <div class="alert alert-block alert-info"><h3>Exercise 1.5: Complete a thresholded nearest neighbor linker using your functions from exercises 1.3 and 1.4.</h3>
 #
-# You have to write two methods:
+# You have to complete two methods:
 #     
 # - Method 1 (`linking_cost_function`): Given dense detections in a pair of frames, extract their centroids and calculate pairwise euclidian distances between them. 
-# - Method 2 (`_link_two_frames`): For each detection in frame $t$, find the nearest neighbor in frame $t+1$ given the cost matrix. If the distance is below a threshold $\tau$, link the two objects. Explore different values of threshold $\tau$.
+# - Method 2 (`_link_two_frames`): We greedily find the nearest neighbors in two frames given the cost matrix. If the cost is below a threshold $\tau$, link the two objects.
+#     - Complete the function such that it returns all unlinked detections in frame $t$ as death events and all unlinked detections in frame $t+1$ as birth events.
+#     - Explore different values of threshold $\tau$.
 # </div>
 
 # %% [markdown]
@@ -524,10 +539,15 @@ class FrameByFrameLinker(ABC):
 
         Returns:
         
-            Linking dictionary:
-                "links": Tuple of lists (ids frame t, ids frame t+1),
-                "births": List of ids,
-                "deaths": List of ids.
+            "links":
+            
+                Tuple of lists. Links from frame t to frame t+1 of form (from0, to0) are split up into two lists: 
+                - idgs_from: [from0, from1 , ...])
+                - ids_to: [to0, to1 , ...])
+
+            "births": List of ids from frame t that are 
+            "deaths": List of ids.
+            
             Ids are one-based, 0 is reserved for background.
         """
         pass
@@ -580,7 +600,6 @@ class FrameByFrameLinker(ABC):
                 lut[b] = n_tracks
                 new_frame[detections[i+1] == b] = n_tracks
                 
-            # print(lut)
             lookup_tables.append(lut)
             out.append(new_frame)
                 
@@ -617,8 +636,7 @@ class FrameByFrameLinker(ABC):
 
 
 # %% [markdown]
-# Hints:
-# - Check out `skimage.measure.regionprops`.   
+# Hint: Check out `skimage.measure.regionprops`.   
 
 # %%
 class NearestNeighborLinkerEuclidian(FrameByFrameLinker):
@@ -663,22 +681,24 @@ class NearestNeighborLinkerEuclidian(FrameByFrameLinker):
             cost_matrix: m x n matrix containing pairwise linking costs of two sets of points.
 
         Returns:
-            Linking dictionary:
-                "links": Tuple of lists (ids frame t, ids frame t+1),
-                "births": List of ids,
-                "deaths": List of ids.
+            "links":
+
+                Tuple of lists. Links from frame t to frame t+1 of form (from0, to0) are split up into two lists: 
+                - idgs_from: [from0, from1 , ...])
+                - ids_to: [to0, to1 , ...])
+
+            "births": List of ids from frame t that are 
+            "deaths": List of ids.
+            
             Ids are one-based, 0 is reserved for background.
         """
         
-        min_objs = min(cost_matrix.shape[0], cost_matrix.shape[1])
-        ids_from = np.arange(min_objs)
-        ids_to = np.arange(min_objs)
-        births = np.arange(min_objs, cost_matrix.shape[1])
-        deaths = np.arange(min_objs, cost_matrix.shape[0])
+        # Your function from exercise 1.4
+        ids_from, ids_to = nearest_neighbor(cost_matrix)
         
-        ### YOUR CODE HERE (REPLACE THE DUMMY INITIALIZATIONS ABOVE) ###
-        
-                            
+        births = np.array([### YOUR CODE HERE ###])
+        deaths = np.array([### YOUR CODE HERE ###])
+            
         # Account for +1 offset of the dense labels
         ids_from += 1
         ids_to += 1
@@ -687,6 +707,7 @@ class NearestNeighborLinkerEuclidian(FrameByFrameLinker):
         
         links = {"links": (ids_from, ids_to), "births": births, "deaths": deaths}
         return links
+
 
 # %%
 # nn_linker = NearestNeighborLinkerEuclidian(threshold=1000) # Explore different values of `threshold`
@@ -714,7 +735,9 @@ visualize_tracks(viewer, nn_tracks, name="nn");
 # ## Exercise 1.6
 # <div class="alert alert-block alert-info"><h3>Exercise 1.6: Estimate the global drift of the data</h3>
 #
-# We can observe that all cells move upwards with an approximately constant displacement in each timestep. Write a slightly modified version of `NearestNeighborLinkerEuclidian` with a slightly modified `linking_cost_function` that accounts for this.
+# We can observe that all cells move upwards with an approximately constant displacement in each timestep. Below you have a slightly modified version of `NearestNeighborLinkerEuclidian` with a modified `linking_cost_function` that models linear drift.
+#
+# Find values of `threshold` and `drift` that lead to an improved solution compared to exercise 1.5.
 #
 # </div>
 
@@ -724,7 +747,7 @@ class NearestNeighborLinkerDriftCorrection(NearestNeighborLinkerEuclidian):
     
     Args:
         
-        drift: tuple of (x,y) drift correction per frame.
+        drift: tuple for drift correction per frame.
     """
     
     def __init__(self, drift, *args, **kwargs):
@@ -743,17 +766,26 @@ class NearestNeighborLinkerDriftCorrection(NearestNeighborLinkerEuclidian):
         
             m x n cost matrix 
         """
+        # regionprops regions are sorted by label
+        regions0 = skimage.measure.regionprops(detections0)
+        points0 = [np.array(r.centroid) for r in regions0]
         
-        ### YOUR CODE HERE
+        regions1 = skimage.measure.regionprops(detections1)
+        points1 = [np.array(r.centroid) for r in regions1]
         
-        dists = np.zeros((detections0.max(), detections1.max()))
+        dists = []
+        for p0 in points0:
+            for p1 in points1:
+                dists.append(np.sqrt(((p0 + self.drift - p1)**2).sum()))
+
+        dists = np.array(dists).reshape(len(points0), len(points1))
+        
         return dists
 
 
 # %%
-# Explore different values of `threshold` and `drift`
-# drift_linker = NearestNeighborLinkerDriftCorrection(threshold=1000, drift=(0, 0))
-drift_linker = NearestNeighborLinkerDriftCorrection(threshold=50, drift=(-20, 0)) # SOLUTION params
+### YOUR CODE HERE ###
+drift_linker = NearestNeighborLinkerDriftCorrection(threshold=1000, drift=(0, 0))
 drift_links = drift_linker.link(detections)
 drift_tracks = drift_linker.relabel_detections(detections, drift_links)
 

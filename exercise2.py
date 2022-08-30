@@ -153,7 +153,7 @@
 # </div>
 #
 #
-# Note on `feature penalties`: TrackMate uses a range of features to calculate distances between frames. By setting a penalty for a certain feature, you multiply that dimension of the distance vector. For example, if you set the penalty for `Y=100`, you will not get any vertical links.
+# Note on `feature penalties`: TrackMate uses a range of features to calculate distances between frames. By setting a penalty for a certain feature, you multiply that dimension of the distance vector. For example, if you set the penalty for `X=100`, you will not get any horizontal links.
 
 # %% [markdown]
 # <img src="figures/trackmate/results.png" width="700"/>

@@ -223,6 +223,13 @@ prob_maps = np.stack([xi[1][0] for xi in pred])
 
 # %% [markdown]
 # Visualize the dense detections. Note that they are still not linked and therefore randomly colored.
+# You are seeing:
+# - your detections on the top left
+# - the ground truth annotations as circles on the bottom left
+# - the corresponding ground truth tracks on the top right
+# - the image on the bottom right
+#
+# Disable grid mode to get an overlay of the four layers.
 
 # %%
 viewer = napari.viewer.current_viewer()
@@ -238,9 +245,6 @@ viewer.grid.enabled = True
 
 # %% [markdown] jp-MarkdownHeadingCollapsed=true tags=[]
 # ## Build a candidate graph from the detections
-
-# %% [markdown]
-#  $G = (V,E)$ 
 
 # %%
 def build_graph(detections, max_distance, detection_probs=None, drift=(0,0)):
@@ -391,7 +395,9 @@ def draw_graph(g, title=None, ax=None, height=None):
 
 
 # %% [markdown]
-# We compare the candidate graph to the ground truth graph. Note that the vertical position of each node corresponds to the vertical position of the detection in the image (in napari).
+# We compare the candidate graph to the ground truth graph.
+#
+# **Note that the vertical position of each node corresponds to the vertical position of the detection in the image in napari.**
 #
 # The candidate graph has both more edges and more nodes than the ground truth graph. Now we need an algorithm to prune the candidate graph.
 
@@ -416,19 +422,32 @@ draw_graph(candidate_graph, "Candidate graph", ax=ax1, height=detections[0].shap
 #
 # Finding a good subgraph $\tilde{G}=(\tilde{V}, \tilde{E})$ can be formulated as an [integer linear program (ILP)](https://en.wikipedia.org/wiki/Integer_programming) (also, refer to the tracking lecture slides), where we assign a binary variable $x$ and a cost $c$ to each vertex and edge in $G$, and then computing $min_c c^Tx$. A set of linear constraints ensure that the solution will be a feasible graph. For example, if an edge is part of $\tilde{G}$, both its incident nodes have to be part of $\tilde{G}$ as well.
 #
-# Here we express the network flow as an ILP using `cvxpy`. We have already written two of the three constraints for you.
+# Here we express the network flow as an ILP using `cvxpy`. We have already completed two of the three constraints for you.
 
 # %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 3.1
-# <div class="alert alert-block alert-info"><h3>Exercise 3.1: Write the flow constraint of the network flow</h3>
-# In words, this means that if a node in $\tilde{G}$ has an incoming edge, it must also have an outgoing edge. Don't forget the edges to the source and target nodes (called "appear" and "death" below). The flow constraint does not apply to the source and target nodes.
+# <div class="alert alert-block alert-info"><h3>Exercise 3.1: Set the correct constraint values for the flow constraint</h3>
+#
+# The constrain says that the numb
+# The four numbers you have to set are marked with `### YOUR CODE HERE###`.
+#
+# Feel free to refer to the lecture slides for a detailed formulation of the network flow ILP.
+#     
+#     
 # </div>
+
+# %% [markdown]
+# Let's walk over the implementation:
+# - We build a second complementary graph with two new nodes `appear` and `death`.
+# `appear` is connected to all vertices in the first frame, `death` is connected to all vertices in the last frame.
+# - Next we define the variable vector `x`, which contains a variable for each edge and for each vertex of the original graph. On top of that, it also contains a variable for all edges of the complementary graph.
+# - Now we assign costs to all these variables. Note that the costs for picking nodes is negative and therefore incentivizes picking many nodes. The costs for picking edges is positive to incentivize picking only few edges of the candidate graph.
+# - Next we define the constrain matrices (refer to lecture slides) and finally the type of constraint (equality or inequality).
 
 # %%
 def graph2ilp_flow(graph, hyperparams):
     """"""
     
-    # Extend the graph with a single appear and death node
     graph_flow = nx.DiGraph()
     graph_flow.add_node("appear", weight=0)
     graph_flow.add_node("death", weight=0)
@@ -453,7 +472,7 @@ def graph2ilp_flow(graph, hyperparams):
     
     c_e = hyperparams["edge_factor"] * np.array([graph.get_edge_data(*e)["weight"] for e in graph.edges])
     c_v = hyperparams["node_factor"] * np.array([v for k, v in graph.nodes(data="weight")])
-    c_e_flow = hyperparams["edge_factor"] * np.array([graph_flow.get_edge_data(*e)["weight"] for e in graph_flow.edges])  # weight set to 0 above
+    c_e_flow = np.array([graph_flow.get_edge_data(*e)["weight"] for e in graph_flow.edges])  # weight set to 0 above
     
     c = np.concatenate([c_e, c_v, c_e_flow])
     
@@ -489,11 +508,29 @@ def graph2ilp_flow(graph, hyperparams):
             for edge in graph_flow.out_edges(node):
                 edge_id = edge_to_idx_flow[edge]
                 A1[node, E+V+edge_id] = -1
-            
+    
     # Flow constraint
     A2 = np.zeros((V, E + V + E_flow))
+    for node in graph.nodes:
+        for edge in graph.in_edges(node):
+            edge_id = edge_to_idx[edge]
+            A2[node, edge_id] =  ### YOUR CODE HERE ###
+        
+        if node in graph_flow.nodes:
+            for edge in graph_flow.in_edges(node):
+                edge_id = edge_to_idx_flow[edge]
+                A2[node, E+V+edge_id] =  ### YOUR CODE HERE ###
+            
+            
+        for edge in graph.out_edges(node):
+            edge_id = edge_to_idx[edge]
+            A2[node, edge_id] =  ### YOUR CODE HERE ###
+         
+        if node in graph_flow.nodes:
+            for edge in graph_flow.out_edges(node):
+                edge_id = edge_to_idx_flow[edge]
+                A2[node, E+V+edge_id] =  ### YOUR CODE HERE ###
     
-    ### YOUR CODE HERE ###
     
     constraints = [
         A0 @ x <= 0, 
@@ -504,7 +541,6 @@ def graph2ilp_flow(graph, hyperparams):
     objective = cp.Minimize( c.T @ x)
 
     return cp.Problem(objective, constraints)
-
 
 # %%
 ilp_flow = graph2ilp_flow(candidate_graph, hyperparams={"node_factor": -1, "edge_factor": 1})
@@ -561,7 +597,7 @@ draw_graph(solved_graph_flow, f"Network flow (no divisions) - cost: {ilp_flow.va
 
 
 # %% [markdown]
-# ### Recolor detections in napari according to solution
+# ### Recolor detections in napari according to solution and compare to ground truth
 
 # %%
 def recolor_detections(detections, graph, node_luts):
@@ -626,8 +662,21 @@ viewer.grid.enabled = True
 # %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 3.2
 # <div class="alert alert-block alert-info"><h3>Exercise 3.2: Extend the network flow from Exercise 3.1 such that tracks can start and end at arbitrary time points.</h3>
-# The code is very similar to exercise 3.1. This time all constraints are already given.  
+# The code is very similar to exercise 3.1.
 # </div>
+#
+# Here is the corresponding code from Exercise 3.1:
+# ```python
+# for n, time in graph.nodes(data="time"):
+#         if time == 0:
+#             # Connect all nodes in initial frame to appear node
+#             graph_flow.add_node(n, weight=0)
+#             graph_flow.add_edge("appear", n, weight=0)
+#         elif time == len(detections) - 1:
+#             # Connect all nodes in last frame to death node
+#             graph_flow.add_node(n, weight=0)
+#             graph_flow.add_edge(n, "death", weight=0)
+# ```
 
 # %%
 def graph2ilp_nodiv(graph, hyperparams):
@@ -769,14 +818,13 @@ viewer.grid.enabled = True
 # %% [markdown] jp-MarkdownHeadingCollapsed=true tags=[]
 # ## Exercise 3.3
 # <div class="alert alert-block alert-info"><h3>Exercise 3.3: Complete yet another extension of the ILP such that it allows for cell divisions.</h3>
+#
 # The constraint matrices A0, A1 and A2 are identical to Exercise 3.2, with the important difference that A1 and A2 are changed to inequality constraints here.
+#     
 # This model needs one more constraint to lead to feasible solutions, we call it the *split constraint*.
 # Please write the final constraint and think about why it is needed.
+#     
 # </div>
-#
-# If you're unsure, you can refer to Malin-Mayor et al. (2021) for inspiration. But be aware that their whole formulation of the ILP is slightly different.
-#
-# [Malin-Mayor, Caroline, et al. "Automated reconstruction of whole-embryo cell lineages by learning from sparse annotations." bioRxiv (2021).](https://www.biorxiv.org/content/10.1101/2021.07.28.454016v1.abstract)
 
 # %%
 def graph2ilp_div(graph, hyperparams):
