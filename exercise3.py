@@ -421,7 +421,7 @@ draw_graph(candidate_graph, "Candidate graph", ax=ax1, height=detections[0].shap
 # %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 3.1
 # <div class="alert alert-block alert-info"><h3>Exercise 3.1: Write the flow constraint of the network flow</h3>
-# In words, this means that if a node in $\tilde{G}$ has an incoming edge, it must also have an outgoing edge. Don't forget the edges to the source and target nodes. The flow constraint does not apply to the source and target nodes.
+# In words, this means that if a node in $\tilde{G}$ has an incoming edge, it must also have an outgoing edge. Don't forget the edges to the source and target nodes (called "appear" and "death" below). The flow constraint does not apply to the source and target nodes.
 # </div>
 
 # %%
@@ -452,7 +452,7 @@ def graph2ilp_flow(graph, hyperparams):
     x = cp.Variable(E + V + E_flow, boolean=True)
     
     c_e = hyperparams["edge_factor"] * np.array([graph.get_edge_data(*e)["weight"] for e in graph.edges])
-    c_v = hyperparams["node_offset"] + hyperparams["node_factor"] * np.array([v for k, v in graph.nodes(data="weight")])
+    c_v = hyperparams["node_factor"] * np.array([v for k, v in graph.nodes(data="weight")])
     c_e_flow = hyperparams["edge_factor"] * np.array([graph_flow.get_edge_data(*e)["weight"] for e in graph_flow.edges])  # weight set to 0 above
     
     c = np.concatenate([c_e, c_v, c_e_flow])
@@ -549,6 +549,10 @@ def solution2graph(solution, base_graph):
 # %%
 solved_graph_flow = solution2graph(ilp_flow, candidate_graph)
 
+# %% [markdown]
+# Expected output (with `hyperparams={"node_factor": -1, "edge_factor": 1}`)
+# <img src="figures/flow.png" width="600" />
+
 # %%
 fig, (ax0, ax1, ax2) = plt.subplots(1,3, figsize=(32, 12))
 draw_graph(gt_graph, "Ground truth graph", ax=ax0, height=detections[0].shape[0])
@@ -636,6 +640,7 @@ def graph2ilp_nodiv(graph, hyperparams):
     
     
     ### YOUR CODE HERE ###
+    # Use hyperparams["cost_appear"] and hyperparams["cost_disappear"]
         
         
     edge_to_idx = {edge: i for i, edge in enumerate(graph.edges)}
@@ -732,6 +737,10 @@ print(ilp_nodiv.variables()[0].value[E+V:])
 # %%
 solved_graph_nodiv = solution2graph(ilp_nodiv, candidate_graph)
 
+# %% [markdown]
+# Expected output (with `hyperparams={"cost_appear": 0.5, "cost_disappear": 0.5, "node_factor": -1, "edge_factor": 1}`)
+# <img src="figures/ilp_nodiv.png" width="600" />
+
 # %%
 fig, (ax0, ax1, ax2) = plt.subplots(1,3, figsize=(32, 12))
 draw_graph(gt_graph, "Ground truth graph", ax=ax0, height=detections[0].shape[0])
@@ -794,7 +803,7 @@ def graph2ilp_div(graph, hyperparams):
     x = cp.Variable(E + V + E_flow, boolean=True)
     
     c_e = hyperparams["edge_factor"] * np.array([graph.get_edge_data(*e)["weight"] for e in graph.edges])
-    c_v = hyperparams["node_factor"] * np.array([v for k, v in graph.nodes(data="weight")])
+    c_v = hyperparams["node_offset"] + hyperparams["node_factor"] * np.array([v for k, v in graph.nodes(data="weight")])
     c_e_flow = np.array([graph_flow.get_edge_data(*e)["weight"] for e in graph_flow.edges])
 
     c = np.concatenate([c_e, c_v, c_e_flow])
@@ -899,6 +908,10 @@ viewer.add_labels(recolored_gt)
 viewer.add_labels(detections)
 viewer.add_labels(det_solved_div)
 viewer.grid.enabled = True
+
+# %% [markdown]
+# Expected output (with `hyperparams={"cost_appear": 0.15, "cost_disappear": 0.5, "node_offset": 0, "node_factor": -1, "edge_factor": 0.4`)
+# <img src="figures/ilp_div.png" width="600" />
 
 # %%
 fig, ((ax0, ax1), (ax2, ax3)) = plt.subplots(2,2, figsize=(24, 16))

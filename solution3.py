@@ -191,7 +191,7 @@ viewer = napari.Viewer()
 viewer.add_image(x)
 visualize_tracks(viewer, y, links.to_numpy(), "ground_truth");
 viewer.add_labels(detections, name=f"detections_scale_{scale}_nmsthres_{nms_thres}");
-# viewer.add_image(prob_maps, colormap="magma", scale=(2,2), opacity=0.2);
+viewer.add_image(prob_maps, colormap="magma", scale=(2,2));
 viewer.grid.enabled = True
 
 
@@ -662,7 +662,7 @@ def graph2ilp_nodiv(graph, hyperparams):
     
 #     c_e = hyperparams["edge_factor"] * np.array([graph.get_edge_data(*e)["weight"] for e in graph.edges])
 #     # print(c_e)
-#     c_v = hyperparams["node_offset"] + hyperparams["node_factor"] * np.array([v for k, v in sorted(dict(graph.nodes(data="weight")).items())])
+#     c_v = hyperparams["node_factor"] * np.array([v for k, v in sorted(dict(graph.nodes(data="weight")).items())])
 #     # print(c_v)
 #     c_va = np.ones(V) * hyperparams["cost_appear"]
 #     c_vd = np.ones(V) * hyperparams["cost_disappear"]
