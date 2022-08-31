@@ -1,4 +1,4 @@
-name: exercise08_v2
+name: exercise08_tracking_cpu
 channels:
   - defaults
   - conda-forge
@@ -313,4 +313,4 @@ dependencies:
     - termcolor==1.1.0
     - werkzeug==2.2.2
     - widgetsnbextension==4.0.2
-prefix: /home/gallusserb/miniconda3/envs/exercise08_v2
+prefix: /home/gallusserb/miniconda3/envs/exercise08_tracking_cpu
