@@ -30,6 +30,9 @@
 # Places where you are expected to write code are marked with ```YOUR CODE HERE```.
 
 # %% [markdown]
+# This notebook was written by Benjamin Gallusser.
+
+# %% [markdown]
 # ![](figures/tracking.gif "tracking")
 
 # %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true jp-MarkdownHeadingCollapsed=true tags=[]
@@ -437,8 +440,8 @@ test_matrix = np.array([
     [8, 3, 8],
 ])
 idx_from, idx_to = nearest_neighbor(test_matrix, threshold=8)
-assert np.all(idx_from == [2, 0, 1])
-assert np.all(idx_to == [0, 1, 2])
+assert np.all(idx_from == [2, 0])
+assert np.all(idx_to == [0, 1])
 
 
 # %% [markdown] tags=[]

@@ -18,6 +18,9 @@
 #
 # Here we will use an extended version of the bipartite matching algorithm we implemented in exercise 1.
 
+# %% [markdown]
+# This notebook was written by Benjamin Gallusser and is inspired by the [TrackMate-StarDist tutorial](https://imagej.net/plugins/trackmate/trackmate-stardist).
+
 # %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
 # ## Introduction to the two-step Linear Assignment Problem
 

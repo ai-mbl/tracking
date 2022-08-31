@@ -28,6 +28,9 @@
 #
 # Places where you are expected to write code are marked with ```YOUR CODE HERE```.
 
+# %% [markdown]
+# This notebook was written by Benjamin Gallusser and Albert Dominguez Mantes.
+
 # %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true jp-MarkdownHeadingCollapsed=true tags=[]
 # ## Import packages
 

@@ -18,6 +18,9 @@
 #
 # You could also run this notebook on your laptop, a GPU is not needed :).
 
+# %% [markdown]
+# This notebook was written by Benjamin Gallusser and Albert Dominguez Mantes.
+
 # %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true jp-MarkdownHeadingCollapsed=true tags=[] jp-MarkdownHeadingCollapsed=true
 # ## Import packages
 
