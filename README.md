@@ -5,7 +5,7 @@ This exercise was created by Benjamin Gallusser and Albert Dominguez Mantes.
 ## Setup
 1. Install environment on your virtual machine (CPU-only, no GPU needed for this exercise): `conda env create -f env_dlmbl_cpu.yml`.
 1. Activate the environment: `conda activate exercise08_tracking_cpu`.
-1. Launch "jupyter lab".
+1. Launch `jupyter lab`.
 1. Start `exercise{1|2|3}.ipynb`. You can ignore the corresponding `.py` files.
 1. Each exercise/section is collapsible by pressing the little arrow to the left of the respective cell.
 
