@@ -14,7 +14,7 @@
 # ---
 
 # %% [markdown]
-# # Exercise 3/3: Tracking with an integer linear program (ILP)
+# # Exercise 3/3: Tracking with an integer linear program (ILP) - Detection
 #
 # You could also run this notebook on your laptop, a GPU is not needed :).
 
@@ -144,16 +144,11 @@ prob_maps = np.stack([xi[1][0] for xi in pred])
 # %%
 np.savez(
     file=base_path / "detected.npz",
+    x=x,
+    y=y,
+    links=links,
     detections=detections,
     centers=centers,
     center_probs=center_probs,
     prob_maps=prob_maps,
 )
-
-# %%
-det = np.load(base_path / "detected.npz", allow_pickle=True)
-links = 
-detections = det["detections"]
-centers = det["centers"]
-center_probs = det["center_probs"]
-prob_maps = det["prob_maps"]
