@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.14.1
+#       jupytext_version: 1.14.5
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -17,6 +17,10 @@
 # # Exercise 1/3: Tracking by detection and simple frame-by-frame matching
 #
 # You could also run this notebook on your laptop, a GPU is not needed.
+#
+# <div class="alert alert-danger">
+# Set your python kernel to <code>08-tracking</code>
+# </div>
 #
 # Here we will walk through all basic components of a tracking-by-detection algorithm.
 #
@@ -30,12 +34,12 @@
 # Places where you are expected to write code are marked with ```YOUR CODE HERE```.
 
 # %% [markdown]
-# This notebook was written by Benjamin Gallusser.
+# This notebook was originally written by Benjamin Gallusser.
 
 # %% [markdown]
 # ![](figures/tracking.gif "tracking")
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true jp-MarkdownHeadingCollapsed=true tags=[]
+# %% [markdown]
 # ## Import packages
 
 # %%
@@ -99,7 +103,7 @@ def preprocess(X, Y, axis_norm=(0,1)):
     return X, Y
 
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Inspect the dataset
 
 # %% [markdown]
@@ -212,7 +216,7 @@ viewer.add_image(x)
 visualize_tracks(viewer, y, links.to_numpy(), "ground_truth");
 
 
-# %% [markdown] jp-MarkdownHeadingCollapsed=true tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 1.1
 # <div class="alert alert-block alert-info"><h3>Exercise 1.1: Highlight the cell divisions</h3>
 #
@@ -273,7 +277,7 @@ viewer.add_image(x)
 divisions = extract_divisions(y, links.to_numpy())
 viewer.add_labels(divisions, name="divisions");
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Object detection using a pre-trained neural network
 
 # %% [markdown]
@@ -284,7 +288,7 @@ viewer.add_labels(divisions, name="divisions");
 #
 # [Schmidt, Uwe, et al. "Cell detection with star-convex polygons." MICCAI, 2018.](https://link.springer.com/chapter/10.1007/978-3-030-00934-2_30)
 
-# %% tags=[]
+# %%
 idx = 0
 model = StarDist2D.from_pretrained("2D_versatile_fluo")
 (detections, details), (prob, _) = model.predict_instances(x[idx], scale=(1, 1), return_predict=True)
@@ -307,7 +311,7 @@ plt.imshow(prob, cmap='magma'); plt.axis('off')
 plt.tight_layout()
 plt.show() 
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true tags=[] jp-MarkdownHeadingCollapsed=true tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 1.2
 # <div class="alert alert-block alert-info"><h3>Exercise 1.2: Explore the parameters of cell detection</h3>
 #
@@ -351,11 +355,11 @@ plt.xticks(range(len(centers)))
 plt.show();
 
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Checkpoint 1
 # <div class="alert alert-block alert-success"><h3>Checkpoint 1: We have good detections, now on to the linking.</h3></div>
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Greedy linking by nearest neighbor
 #
 # The detections in each frame now need to be linked in time to form tracks. In the following exercises, we will explore different ways of doing this.
@@ -377,7 +381,7 @@ def pairwise_euclidian_distance(points0, points1):
     return dists
 
 
-# %% [markdown] tags=[]
+# %% [markdown]
 # Here are two (almost random ;)) lists of points to test your function on.
 
 # %%
@@ -444,7 +448,7 @@ assert np.all(idx_from == [2, 0])
 assert np.all(idx_to == [0, 1])
 
 
-# %% [markdown] tags=[]
+# %% [markdown]
 # ## Exercise 1.5
 # <div class="alert alert-block alert-info"><h3>Exercise 1.5: Complete a thresholded nearest neighbor linker using your functions from exercises 1.3 and 1.4.</h3>
 #
@@ -734,7 +738,7 @@ visualize_tracks(viewer, nn_tracks, name="nn");
 # ## Checkpoint 2
 # <div class="alert alert-block alert-success"><h3>Checkpoint 2: We built a basic tracking algorithm from scratch :).</h3></div>
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 1.6
 # <div class="alert alert-block alert-info"><h3>Exercise 1.6: Estimate the global drift of the data</h3>
 #
@@ -804,7 +808,7 @@ viewer.add_image(x)
 visualize_tracks(viewer, drift_tracks, name="drift");
 
 
-# %% [markdown] tags=[]
+# %% [markdown]
 # ## Optimal frame-by-frame matching (*Linear assignment problem* or *Weighted bipartite matching*)
 
 # %% [markdown]
@@ -826,7 +830,7 @@ visualize_tracks(viewer, drift_tracks, name="drift");
 #
 # from [Jaqaman, Khuloud, et al. "Robust single-particle tracking in live-cell time-lapse sequences." Nature Methods (2008)](https://www.nature.com/articles/nmeth.1237)
 
-# %% [markdown] jp-MarkdownHeadingCollapsed=true tags=[]
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 1.7
 # <div class="alert alert-block alert-info"><h3>Exercise 1.7: Perform optimal frame-by-frame linking</h3>
 #
@@ -929,7 +933,7 @@ viewer.add_image(x)
 visualize_tracks(viewer, bm_tracks, name="bm");
 
 
-# %% [markdown] tags=[]
+# %% [markdown]
 # ## Other suitable features for linking cost function
 
 # %% [markdown]

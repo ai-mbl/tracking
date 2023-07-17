@@ -1,4 +1,4 @@
-name: exercise08_tracking_cpu
+name: 08-tracking-laptop
 channels:
   - defaults
   - conda-forge

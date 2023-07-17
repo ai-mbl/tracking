@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.14.1
+#       jupytext_version: 1.14.5
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -19,9 +19,9 @@
 # You could also run this notebook on your laptop, a GPU is not needed.
 
 # %% [markdown]
-# This notebook was written by Benjamin Gallusser.
+# This notebook was originally by Benjamin Gallusser.
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Import packages
 
 # %%
@@ -82,7 +82,7 @@ def preprocess(X, Y, axis_norm=(0,1)):
     return X, Y
 
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Inspect the dataset
 
 # %%
@@ -158,7 +158,7 @@ viewer.add_image(x)
 visualize_tracks(viewer, y, links.to_numpy(), "ground_truth");
 
 
-# %% [markdown] jp-MarkdownHeadingCollapsed=true tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 1.1
 # <div class="alert alert-block alert-info"><h3>Exercise 1.1: Highlight the cell divisions</h3>
 
@@ -205,10 +205,10 @@ viewer.add_image(x)
 divisions = extract_divisions(y, links.to_numpy())
 viewer.add_labels(divisions, name="divisions");
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Object detection using a pre-trained neural network
 
-# %% tags=[]
+# %%
 idx = 0
 model = StarDist2D(None, name="stardist_breast_cancer", basedir="models")
 (detections, details), (prob, _) = model.predict_instances(x[idx], scale=(1, 1), return_predict=True)
@@ -228,7 +228,7 @@ plt.imshow(prob, cmap='magma'); plt.axis('off')
 plt.tight_layout()
 plt.show() 
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true tags=[] jp-MarkdownHeadingCollapsed=true tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 1.2
 # <div class="alert alert-block alert-info"><h3>Exercise 1.2: Explore the parameters of cell detection</h3></div>
 
@@ -256,14 +256,14 @@ plt.xticks(range(len(centers)))
 plt.show();
 
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Checkpoint 1
 # <div class="alert alert-block alert-success"><h3>Checkpoint 1: We have good detections, now on to the linking.</h3></div>
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true tags=[]
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Greedy linking by nearest neighbor
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 1.3
 # <div class="alert alert-block alert-info"><h3>Exercise 1.3: Write a function that computes pairwise euclidian distances given two lists of points</h3></div>
 
@@ -303,7 +303,7 @@ cyan_points = np.load("points.npz")["cyan"]
 assert np.allclose(dists, np.load("points.npz")["dists_green_cyan"])
 
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 1.4
 # <div class="alert alert-block alert-info"><h3>Exercise 1.4: Write a function that greedily extracts a nearest neighbors assignment given a cost matrix</h3></div>
 
@@ -351,7 +351,7 @@ assert np.all(idx_from == [2, 0])
 assert np.all(idx_to == [0, 1])
 
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 1.5
 # <div class="alert alert-block alert-info"><h3>Exercise 1.5: Complete a thresholded nearest neighbor linker using your functions from exercises 1.3 and 1.4</h3></div>
 
@@ -625,11 +625,11 @@ viewer.add_image(x)
 visualize_tracks(viewer, nn_tracks, name="nn");
 
 
-# %% [markdown] tags=[]
+# %% [markdown]
 # ## Checkpoint 2
 # <div class="alert alert-block alert-success"><h3>Checkpoint 2: We built a basic tracking algorithm from scratch :).</h3></div>
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 1.6
 # <div class="alert alert-block alert-info"><h3>Exercise 1.6: Estimate the global drift of the data</h3></div>
 
@@ -690,10 +690,10 @@ viewer.add_image(x)
 visualize_tracks(viewer, drift_tracks, name="drift");
 
 
-# %% [markdown] tags=[]
+# %% [markdown]
 # ## Optimal frame-by-frame matching (*Linear assignment problem* or *Weighted bipartite matching*)
 
-# %% [markdown] jp-MarkdownHeadingCollapsed=true tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 1.7
 # <div class="alert alert-block alert-info"><h3>Exercise 1.7: Perform optimal frame-by-frame linking</h3></div>
 
