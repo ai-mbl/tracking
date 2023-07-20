@@ -50,6 +50,7 @@
 from IPython.display import display, HTML
 display(HTML("<style>.container { width:100% !important; }</style>"))
 
+# TODO remove unnecessary imports, automatically with black
 import sys
 import time
 from urllib.request import urlretrieve
@@ -73,7 +74,7 @@ import napari
 import networkx as nx
 
 import motile
-from motile.plot import draw_track_graph
+from motile.plot import draw_track_graph, draw_solution
 
 # Pretty tqdm progress bars 
 # ! jupyter nbextension enable --py widgetsnbextension
@@ -264,7 +265,7 @@ def build_graph(detections, max_distance, detection_probs=None, drift=(0,0)):
 
 # %%
 gt_graph = build_gt_graph(labels, links.to_numpy())
-candidate_graph = build_graph(det, max_distance=30, detection_probs=det_center_probs, drift=(-6 , 0))
+candidate_graph = build_graph(det, max_distance=50, detection_probs=det_center_probs, drift=(-4 , 0))
 
 # %%
 # TODO upgrade this a bit
@@ -308,11 +309,82 @@ fig_candidate.show()
 
 
 # %% [markdown]
-# ## Network flow
+# ## Exercise 2.1 - Network flow
+# <div class="alert alert-block alert-info"><h3>Exercise 2.1: TODO define task</h3></div>
 
-# %% [markdown]
-# ## Exercise 3.1
-# <div class="alert alert-block alert-info"><h3>Exercise 3.1: TODO define task</h3></div>
+# %%
+def print_solution_stats(solver, graph, gt_graph):
+    time.sleep(0.1) # to wait for ilpy prints
+    print(f"\nCandidate graph\t\t{len(graph.nodes):3} nodes\t{len(graph.edges):3} edges")
+    print(f"Ground truth graph\t{len(gt_graph.nodes):3} nodes\t{len(gt_graph.edges):3} edges")
+    
+    node_selected = solver.get_variables(motile.variables.NodeSelected)
+    edge_selected = solver.get_variables(motile.variables.EdgeSelected)
+    nodes = 0
+    for node in candidate_graph.nodes:
+        if solver.solution[node_selected[node]] > 0.5:
+            nodes += 1
+    edges = 0
+    for u, v in candidate_graph.edges:
+        if solver.solution[edge_selected[(u, v)]] > 0.5:
+            edges += 1       
+    print(f"Solution graph\t\t{nodes:3} nodes\t{edges:3} edges")
+
+
+# %%
+def solve_network_flow(graph):
+    solver = motile.Solver(graph)
+    
+    # Add costs
+    solver.add_costs(
+        motile.costs.NodeSelection(
+            weight=-1,
+            attribute="weight"))
+    solver.add_costs(
+        motile.costs.EdgeSelection(
+            weight=-1,
+            attribute="weight"))
+    # solver.add_costs(motile.costs.Appear(constant=10000))
+    
+    # Add constraints
+    solver.add_constraints(motile.constraints.MaxParents(1))
+    solver.add_constraints(motile.constraints.MaxChildren(1))
+    
+    from motile.constraints import InOutSymmetry, MinTrackLength
+    solver.add_constraints(InOutSymmetry())
+    solver.add_constraints(MinTrackLength(1))
+    
+    solution = solver.solve()
+    
+    # solution_graph = solution2graph(solver, graph)
+   
+    # return solution_graph, solver.solution.get_value()
+    return solver
+
+
+# %%
+flow = solve_network_flow(candidate_graph)
+print_solution_stats(flow, candidate_graph, gt_graph)
+
+# %%
+fig_flow = draw_solution(
+    candidate_graph,
+    flow,
+    position_attribute="draw_position",
+    width=1000,
+    height=500,
+    label_attribute="show",
+)
+fig_flow = fig_flow.update_layout(
+    title={
+        'text': f"Network flow (no divisions) - cost: {flow.solution.get_value()}",
+        'y':0.98,
+        'x':0.5,
+    }
+)
+fig_flow.show()
+fig_gt.show()
+
 
 # %%
 def solution2graph(solver, base_graph):
@@ -331,88 +403,39 @@ def solution2graph(solver, base_graph):
         if solver.solution[index] > 0.5:
             # print(base_graph.edges[edge])
             new_graph.add_edge(*edge, **base_graph.edges[edge])
-            
-    return new_graph
-
-def print_solution_stats(solver, graph):
-    time.sleep(0.1) # to wait for ilpy prints
-    print(f"\nCandidate graph\t{len(graph.nodes):3} nodes\t{len(graph.edges):3} edges")
     
-    node_selected = solver.get_variables(motile.variables.NodeSelected)
-    edge_selected = solver.get_variables(motile.variables.EdgeSelected)
-    nodes = 0
-    for node in candidate_graph.nodes:
-        if solver.solution[node_selected[node]] > 0.5:
-            nodes += 1
-    edges = 0
-    for u, v in candidate_graph.edges:
-        if solver.solution[edge_selected[(u, v)]] > 0.5:
-            edges += 1       
-    print(f"Solution graph\t{nodes:3} nodes\t{edges:3} edges")
+    track_graph = motile.TrackGraph(new_graph, frame_attribute="time")
+    
+    return track_graph
 
 
 # %%
-def solve_network_flow(graph):
-    # TODO update to actual flow
-    solver = motile.Solver(graph)
-    
-    # Add costs
-    solver.add_costs(
-        motile.costs.NodeSelection(
-            weight=-1,
-            attribute="weight"))
-    solver.add_costs(
-        motile.costs.EdgeSelection(
-            weight=1,
-            attribute="weight"))
-    solver.add_costs(motile.costs.Appear(constant=10000))
-    
-    # Add constraints
-    solver.add_constraints(motile.constraints.MaxParents(1))
-    solver.add_constraints(motile.constraints.MaxChildren(1))
-    
-    solution = solver.solve()
-    
-    print_solution_stats(solver, graph)
-    solution_graph = solution2graph(solver, graph)
-   
-    return solution_graph, solver.solution.get_value()
-
-
-# %%
-flow, flow_cost = solve_network_flow(candidate_graph)
-
-# %%
-fig, (ax0, ax1, ax2) = plt.subplots(1,3, figsize=(32, 12))
-draw_graph(gt_graph, "Ground truth graph", ax=ax0, height=detections[0].shape[0])
-draw_graph(candidate_graph, "Candidate graph", ax=ax1, height=detections[0].shape[0])
-draw_graph(flow, f"Network flow (no divisions) - cost: {flow_cost}", ax=ax2, height=detections[0].shape[0])
-
-
-# %%
-def recolor_detections(detections, graph, node_luts):
-    """."""
-    assert len(detections) == len(node_luts)
-    
+def recolor_segmentation(segmentation, graph, det_attribute="show"):
+    """TODO"""    
     out = []
     n_tracks = 1
     color_lookup_tables = []
     
-    for t in tqdm(range(0, len(detections)), desc="Recoloring detections"):
-        new_frame = np.zeros_like(detections[t])
+    for t in range(0, len(segmentation)):
+        new_frame = np.zeros_like(segmentation[t])
         color_lut = {}
-        for det_id, node_id in node_luts[t].items():
+        for node_id in graph.nodes_by_frame(t):
+            det_id = graph.nodes[node_id][det_attribute]
             if node_id not in graph.nodes:
                 continue
-            edges = graph.in_edges(node_id)
-            if not edges:
-                new_frame[detections[t] == graph.nodes[node_id]["detection_id"]] = n_tracks
-                color_lut[graph.nodes[node_id]["detection_id"]] = n_tracks
+            
+            in_edges = []
+            for (u,v) in graph.edges:
+                if v == node_id:
+                    in_edges.append((u, v))
+            if not in_edges:
+                new_frame[segmentation[t] == det_id] = n_tracks
+                color_lut[det_id] = n_tracks
                 n_tracks += 1
             else:
-                for v_tm1, u_t0 in edges:
-                    new_frame[detections[t] == graph.nodes[u_t0]["detection_id"]] = color_lookup_tables[t-1][graph.nodes[v_tm1]["detection_id"]]
-                    color_lut[graph.nodes[u_t0]["detection_id"]] = color_lookup_tables[t-1][graph.nodes[v_tm1]["detection_id"]]
+                for v_tm1, u_t0 in in_edges:
+                    new_frame[segmentation[t] == graph.nodes[u_t0][det_attribute]] = color_lookup_tables[t-1][graph.nodes[v_tm1][det_attribute]]
+                    color_lut[graph.nodes[u_t0][det_attribute]] = color_lookup_tables[t-1][graph.nodes[v_tm1][det_attribute]]
                 
         color_lookup_tables.append(color_lut)
         out.append(new_frame)
@@ -421,18 +444,16 @@ def recolor_detections(detections, graph, node_luts):
     return np.stack(out)
 
 # %%
-recolored_gt = recolor_detections(y, gt_graph, gt_luts)
-detections_ilp_flow = recolor_detections(detections=detections, graph=flow, node_luts=candidate_luts)
+recolored_gt = recolor_segmentation(labels, gt_graph)
+det_flow = recolor_segmentation(det, graph=solution2graph(flow, candidate_graph))
 
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
 viewer = napari.Viewer()
-viewer.add_image(x)
-# visualize_tracks(viewer, y)
+viewer.add_image(img)
 viewer.add_labels(recolored_gt)
-viewer.add_labels(detections)
-viewer.add_labels(detections_ilp_flow)
+viewer.add_labels(det_flow)
 viewer.grid.enabled = True
 
 
@@ -445,60 +466,73 @@ viewer.grid.enabled = True
 # <div class="alert alert-block alert-info"><h3>Exercise 3.2: TODO make placeholders! Extend the network flow from Exercise 3.1 such that tracks can start and end at arbitrary time points</h3></div>
 
 # %%
-def solve_network_flow_birth_death(graph):
+def solve_network_flow_birth(graph):
     solver = motile.Solver(graph)
     
     # Add costs
     solver.add_costs(
         motile.costs.NodeSelection(
             weight=-1,
-            attribute="weight"))
+            attribute="weight",
+            # constant=-1,
+        ))
     solver.add_costs(
         motile.costs.EdgeSelection(
-            weight=1,
-            attribute="weight"))
-    solver.add_costs(motile.costs.Appear(constant=0.5))
-    # TODO implement
-    # solver.add_costs(motile.costs.Disappear(constant=0.5))
+            weight=-1,
+            attribute="weight",
+            # constant=-1,
+        ))
+    solver.add_costs(motile.costs.Appear(constant=1.5))
     
     # Add constraints
     solver.add_constraints(motile.constraints.MaxParents(1))
     solver.add_constraints(motile.constraints.MaxChildren(1))
     
     solution = solver.solve()
+    # solution_graph = solution2graph(solver, graph)
     
-    print_solution_stats(solver, graph)
-    solution_graph = solution2graph(solver, graph)
-    
-    return solution_graph, solver.solution.get_value()
+    # return solution_graph, solver.solution.get_value()
+    return solver
 
 
 # %%
-birth_death, birth_death_cost = solve_network_flow_birth_death(candidate_graph)
+with_birth = solve_network_flow_birth(candidate_graph)
+print_solution_stats(with_birth, candidate_graph, gt_graph)
 
 # %%
-fig, (ax0, ax1, ax2) = plt.subplots(1,3, figsize=(32, 12))
-draw_graph(gt_graph, "Ground truth graph", ax=ax0, height=detections[0].shape[0])
-draw_graph(candidate_graph, "Candidate graph", ax=ax1, height=detections[0].shape[0])
-draw_graph(birth_death, f"ILP solution (no divisions) - cost:{birth_death_cost}", ax=ax2, height=detections[0].shape[0])
+fig_birth = draw_solution(
+    candidate_graph,
+    with_birth,
+    position_attribute="draw_position",
+    width=1000,
+    height=500,
+    label_attribute="show",
+)
+fig_birth = fig_birth.update_layout(
+    title={
+        'text': f"ILP formulation (no divisions) - cost: {with_birth.solution.get_value()}",
+        'y':0.98,
+        'x':0.5,
+    }
+)
+fig_birth.show()
+fig_gt.show()
 
 # %%
-recolored_gt = recolor_detections(y, gt_graph, gt_luts)
-detections_ilp_nodiv = recolor_detections(detections=detections, graph=birth_death, node_luts=candidate_luts)
+recolored_gt = recolor_segmentation(labels, gt_graph)
+det_birth = recolor_segmentation(det, graph=solution2graph(with_birth, candidate_graph))
 
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
 viewer = napari.Viewer()
-viewer.add_image(x)
-# visualize_tracks(viewer, y)
+viewer.add_image(img)
 viewer.add_labels(recolored_gt)
-viewer.add_labels(detections)
-viewer.add_labels(detections_ilp_nodiv)
+viewer.add_labels(det_birth)
 viewer.grid.enabled = True
 
 
-# %% [markdown]
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## ILP model including divisions
 
 # %% [markdown]
@@ -516,48 +550,56 @@ def solve_full_ilp(graph):
             attribute="weight"))
     solver.add_costs(
         motile.costs.EdgeSelection(
-            weight=0.4,
+            weight=-1,
             attribute="weight"))
-    solver.add_costs(motile.costs.Appear(constant=0.15))
-    # TODO implement
-    # solver.add_costs(motile.costs.Disappear(constant=0.5))
-    solver.add_costs(motile.costs.Split(0.02))
-    
+    solver.add_costs(motile.costs.Appear(constant=0.75))    
+    solver.add_costs(motile.costs.Split(constant=1.5))
     
     # Add constraints
     solver.add_constraints(motile.constraints.MaxParents(1))
     solver.add_constraints(motile.constraints.MaxChildren(2))
     
-    solution = solver.solve()
+    solution = solver.solve()    
     
-    print_solution_stats(solver, graph)
-    solution_graph = solution2graph(solver, graph)
-    
-    return solution_graph, solver.solution.get_value()
+    return solver
+
 
 # %%
-full_ilp, full_ilp_cost = solve_full_ilp(candidate_graph)
+full_ilp = solve_full_ilp(candidate_graph)
+print_solution_stats(full_ilp, candidate_graph, gt_graph)
 
 # %%
-det_solved_div = recolor_detections(detections=detections, graph=full_ilp, node_luts=candidate_luts)
+fig_ilp = draw_solution(
+    candidate_graph,
+    full_ilp,
+    position_attribute="draw_position",
+    width=1000,
+    height=500,
+    label_attribute="show",
+)
+fig_ilp = fig_ilp.update_layout(
+    title={
+        'text': f"ILP formulation with divisions - cost: {full_ilp.solution.get_value()}",
+        'y':0.98,
+        'x':0.5,
+    }
+)
+fig_ilp.show()
+fig_gt.show()
 
 # %%
+recolored_gt = recolor_segmentation(labels, gt_graph)
+det_ilp = recolor_segmentation(det, graph=solution2graph(full_ilp, candidate_graph))
+
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
 viewer = napari.Viewer()
-viewer.add_image(x)
+viewer.add_image(img)
 viewer.add_labels(recolored_gt)
-viewer.add_labels(detections)
-viewer.add_labels(det_solved_div)
+viewer.add_labels(det_ilp)
 viewer.grid.enabled = True
 
 # %%
-fig, ((ax0, ax1), (ax2, ax3)) = plt.subplots(2,2, figsize=(24, 16))
-draw_graph(candidate_graph, "Candidate graph", ax=ax0)
-draw_graph(full_ilp, f"ILP solution (with divisions) - cost: {full_ilp_cost}", ax=ax1)
-draw_graph(gt_graph, "Ground truth graph", ax=ax2)
-draw_graph(birth_death, f"ILP solution (no divisions) - cost: {birth_death_cost}", ax=ax3)
-
 
 # %%
