@@ -14,14 +14,28 @@
 # ---
 
 # %% [markdown]
-# # Exercise 3/3: Tracking with an integer linear program (ILP)
+# # Exercise 2: Tracking-by-detection with an integer linear program (ILP)
 #
 # You could also run this notebook on your laptop, a GPU is not needed :).
+#
+# <div class="alert alert-danger">
+# Set your python kernel to <code>08-ilp-tracking</code>
+# </div>
+#
+# You will learn
+# - TODO
+#
+# Places where you are expected to write code are marked with
+# ```
+# ######################
+# ### YOUR CODE HERE ###
+# ######################
+# ```
+#
+# This notebook was originally written by Benjamin Gallusser.
 
 # %% [markdown]
-# This notebook was written by Benjamin Gallusser and Albert Dominguez Mantes.
-
-# %% [markdown]
+# TODO remove
 # 1. Obligatory conda install the following packages to solve the environment:
 #     - napari
 #     - jupyter-lab
@@ -59,27 +73,34 @@ import napari
 import networkx as nx
 
 import motile
+from motile.plot import draw_track_graph
 
 # Pretty tqdm progress bars 
 # ! jupyter nbextension enable --py widgetsnbextension
 
 # %% [markdown]
-# ## Load the dataset and the detections and inspect them in napari
+# ## Load the dataset inspect it in napari
+
+# %% [markdown]
+# For this exercise we will work with a small excerpt of the dataset from exercise 1. We already provide you with the detections this time, let's inspect them. 
 
 # %%
-base_path = Path("data/exercise3")
-det = np.load("data/exercise3/detected.npz", allow_pickle=True)
-x = det["x"]
-y = det["y"]
-links = pd.DataFrame(det["links"], columns=["track_id", "from", "to", "parent_id"])
-detections = det["detections"]
-centers = det["centers"]
-center_probs = det["center_probs"]
-prob_maps = det["prob_maps"]
+base_path = Path("data/exercise2")
+data = np.load(base_path / "detected_renumbered.npz", allow_pickle=True)
+img = data["img"]
+labels = data["labels"]
+links = pd.DataFrame(data["links"], columns=["track_id", "from", "to", "parent_id"])
+det = data["det"]
+det_prob_maps = data["det_prob_maps"]
+det_centers = data["det_centers"][()] # det_centers is a dictionary
+det_center_probs = data["det_center_probs"][()] # det_center_probs is a dictionary
 
 # %%
+viewer = napari.viewer.current_viewer()
+if viewer:
+    viewer.close()
 viewer = napari.Viewer()
-viewer.add_image(x, name="image");
+viewer.add_image(img, name="image");
 
 
 # %% [markdown]
@@ -118,156 +139,172 @@ def visualize_tracks(viewer, y, links=None, name=""):
 
 
 # %%
-# visualize_tracks(viewer, y, links.to_numpy(), "ground_truth");
+viewer = napari.viewer.current_viewer()
+if viewer:
+    viewer.close()
+viewer = napari.Viewer()
+viewer.add_image(img)
+visualize_tracks(viewer, labels, links.to_numpy(), "ground_truth");
+viewer.add_labels(det, name="detections");
+viewer.grid.enabled = True
 
 # %%
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
-viewer = napari.Viewer()
-viewer.add_image(x)
-visualize_tracks(viewer, y, links.to_numpy(), "ground_truth");
-viewer.add_labels(detections, name=f"detections");
-viewer.add_image(prob_maps, colormap="magma", scale=(2,2));
-viewer.grid.enabled = True
 
 
 # %% [markdown]
-# ## Build a candidate graph from the detections
+# ## Build the ground truth graph, as well as a candidate graph from the detections
 
 # %%
-def build_graph(detections, max_distance, detection_probs=None, drift=(0,0)):
-    """
+def build_gt_graph(labels, links=None):
+    """TODO"""    
     
-        detection_probs: list of arrays, corresponding to ordered ids in detections.
-    """
+    print("Build ground truth graph")
     G = nx.DiGraph()
-    n_v = 0
     
     luts = []
-    draw_positions = {}
-    
-    for t, d in enumerate(detections):
-        frame = skimage.segmentation.relabel_sequential(d)[0]
-        regions = skimage.measure.regionprops(frame)
+    n_v = 0
+    for t, d in tqdm(enumerate(labels), desc="add nodes"):
         lut = {}
+        regions = skimage.measure.regionprops(d)
         for i, r in enumerate(regions):
-            draw_pos = np.array([t, d.shape[0] - r.centroid[0]])
-            weight = detection_probs[t][i] if detection_probs is not None else 1
-            G.add_node(n_v, time=t, detection_id=r.label, weight=weight, draw_position=draw_pos)
-            draw_positions[n_v] = draw_pos
+            draw_pos = int(d.shape[0] - r.centroid[0])
+            # TODO update motile plotting function to not require contiguous node ids starting from 0
+            G.add_node(n_v, time=t, show=r.label, draw_position=draw_pos)
             lut[r.label] = n_v
-            n_v += 1
+            n_v += 1 
         luts.append(lut)
 
     n_e = 0
-    for t, (d0, d1) in enumerate(zip(detections, detections[1:])):
-        f0 = skimage.segmentation.relabel_sequential(d0)[0]
-        r0 = skimage.measure.regionprops(f0)
+    for t, (d0, d1) in tqdm(enumerate(zip(labels, labels[1:])), desc="add edges"):
+        r0 = skimage.measure.regionprops(d0)
         c0 = [np.array(r.centroid) for r in r0]
-
-        f1 = skimage.segmentation.relabel_sequential(d1)[0]
-        r1 = skimage.measure.regionprops(f1)
+         
+        r1 = skimage.measure.regionprops(d1)
         c1 = [np.array(r.centroid) for r in r1]
 
         for _r0, _c0 in zip(r0, c0):
             for _r1, _c1 in zip(r1, c1):
                 dist = np.linalg.norm(_c0 - _c1)
-                if dist < max_distance:
+                if _r0.label == _r1.label:
                     G.add_edge(
+                        # TODO update motile plotting function to not require contiguous node ids starting from 0
                         luts[t][_r0.label],
                         luts[t+1][_r1.label],
-                        # normalized euclidian distance
-                        weight = np.linalg.norm(_c0 + np.array(drift) - _c1) / max_distance,
                         edge_id = n_e,
+                        # show=".",
                     )
                     n_e += 1
-    
-    G = motile.TrackGraph(graph_data=G, frame_attribute="time")
-    
-    return G, luts
 
+    if links is not None:
+        divisions = links[links[:,3] != 0]
+        for d in divisions:
+            if d[1] > 0 and d[1] < labels.shape[0]:
+                try:
+                    G.add_edge(
+                        luts[d[1] - 1][d[3]],
+                        luts[d[1]][d[0]],
+                        edge_id = n_e,
+                        show="DIV",
+                    )
+                    n_e += 1
+                except KeyError:
+                    pass
+                    
+    G = motile.TrackGraph(G, frame_attribute="time")
+    
+    return G
 
-# %%
-def build_graph_from_tracks(detections, links=None):
-    """"""
+def build_graph(detections, max_distance, detection_probs=None, drift=(0,0)):
+    """TODO
+    
+    detection_probs: list of arrays, corresponding to ordered ids in detections."""
+    
+    print("Build candidate graph")
     G = nx.DiGraph()
-    n_v = 0
     
-    luts = []
-    draw_positions = {}
-    
-    for t, d in enumerate(detections):
-        frame = d
-        regions = skimage.measure.regionprops(frame)
-        lut = {}
-        for r in regions:
-            draw_pos = np.array([t, d.shape[0] - r.centroid[0]])
-            G.add_node(n_v, time=t, detection_id=r.label, weight=1, draw_position=draw_pos)
-            draw_positions[n_v] = draw_pos
-            lut[r.label] = n_v
-            n_v += 1
-        luts.append(lut)
-        
-    n_e = 0
-    for t, (d0, d1) in enumerate(zip(detections, detections[1:])):
-        f0 = d0
-        r0 = skimage.measure.regionprops(f0)
-        c0 = [np.array(r.centroid) for r in r0]
+    for t, d in tqdm(enumerate(detections), desc="add nodes"):
+        regions = skimage.measure.regionprops(d)
+        for i, r in enumerate(regions):
+            draw_pos = int(d.shape[0] - r.centroid[0])
+            weight = np.round(detection_probs[r.label], decimals=2).item() if detection_probs is not None else 1
+            # TODO update motile plotting function to not require contiguous node ids starting from 0
+            G.add_node(r.label - 1, time=t, show=r.label, weight=weight, draw_position=draw_pos)
 
-        f1 = d1
-        r1 = skimage.measure.regionprops(f1)
+    n_e = 0
+    for t, (d0, d1) in tqdm(enumerate(zip(detections, detections[1:])), desc="add edges"):
+        r0 = skimage.measure.regionprops(d0)
+        c0 = [np.array(r.centroid) for r in r0]
+         
+        r1 = skimage.measure.regionprops(d1)
         c1 = [np.array(r.centroid) for r in r1]
 
         for _r0, _c0 in zip(r0, c0):
             for _r1, _c1 in zip(r1, c1):
-                if _r0.label == _r1.label:
+                dist = np.linalg.norm(_c0 + np.array(drift) - _c1)
+                if dist < max_distance:
                     G.add_edge(
-                        luts[t][_r0.label],
-                        luts[t+1][_r1.label],
-                        # normalized euclidian distance
-                        weight = np.linalg.norm(_c0 - _c1),
-                        edge_id = n_e,
+                        # TODO update motile plotting function to not require contiguous node ids starting from 0
+                        _r0.label - 1,
+                        _r1.label - 1,
+                        # 1 - normalized euclidian distance
+                        weight=1 - np.round(np.linalg.norm(_c0 + np.array(drift) - _c1) / max_distance, decimals=3).item(),
+                        edge_id=n_e,
+                        # score=1,
+                        show="?",
                     )
                     n_e += 1
+
+    G = motile.TrackGraph(G, frame_attribute="time")
     
-    if links is not None:
-        divisions = links[links[:,3] != 0]
-        for d in divisions:
-            if d[1] > 0 and d[1] < detections.shape[0]:
-                try:
-                    G.add_edge(luts[d[1] - 1][d[3]], luts[d[1]][d[0]])
-                except KeyError:
-                    pass
-    
-    return G, luts
+    return G
 
 
 # %%
-def draw_graph(g, title=None, ax=None, height=None):
-    pos = {i: g.nodes[i]["draw_position"] for i in g.nodes}
-    if ax is None:
-        _, ax = plt.subplots()
-    ax.set_title(title)
-    nx.draw(g, pos=pos, with_labels=True, ax=ax)
+gt_graph = build_gt_graph(labels, links.to_numpy())
+candidate_graph = build_graph(det, max_distance=30, detection_probs=det_center_probs, drift=(-6 , 0))
 
-    ax.set_axis_on()
-    ax.tick_params(left=True, bottom=True, labelleft=True, labelbottom=True)
-    if height:
-        ax.set_ylim(0, height)
+# %%
+# TODO upgrade this a bit
+fig_gt = draw_track_graph(
+    gt_graph,
+    position_attribute="draw_position",
+    width=1000,
+    height=500,
+    label_attribute='show',
+    node_color=(0, 128, 0),
+    edge_color=(0, 128, 0),
+)
+fig_gt = fig_gt.update_layout(
+    title={
+        'text': "Ground truth",
+        'y':0.98,
+        'x':0.5,
+    }
+)
+
+fig_candidate = draw_track_graph(
+    candidate_graph,
+    position_attribute="draw_position",
+    width=1000,
+    height=500,
+    label_attribute='show',
+    alpha_attribute='weight',
     
-    ax.set_xlabel("time")
-    ax.set_ylabel("y (spatial)");
+)
+fig_candidate = fig_candidate.update_layout(
+    title={
+        'text': "Candidate graph",
+        'y':0.98,
+        'x':0.5,
+    }
+)
 
 
-# %%
-gt_graph, gt_luts = build_graph_from_tracks(y, links.to_numpy())
-candidate_graph, candidate_luts = build_graph(detections, max_distance=50, detection_probs=center_probs, drift=(-6 , 0))
-
-# %%
-fig, (ax0, ax1) = plt.subplots(1,2, figsize=(24, 12))
-draw_graph(gt_graph, "Ground truth graph", ax=ax0, height=detections[0].shape[0])
-draw_graph(candidate_graph, "Candidate graph", ax=ax1, height=detections[0].shape[0])
+fig_gt.show()
+fig_candidate.show()
 
 
 # %% [markdown]

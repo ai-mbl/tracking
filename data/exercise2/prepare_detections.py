@@ -21,7 +21,7 @@
 # %% [markdown]
 # This notebook was originally written by Benjamin Gallusser and Albert Dominguez Mantes.
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true jp-MarkdownHeadingCollapsed=true tags=[] jp-MarkdownHeadingCollapsed=true
+# %% [markdown]
 # ## Import packages
 
 # %%
@@ -47,7 +47,6 @@ matplotlib.rcParams['figure.figsize'] = (12, 6)
 from tifffile import imread, imwrite
 from tqdm.auto import tqdm
 import skimage
-import pandas as pd
 import scipy
 
 from stardist import fill_label_holes, random_label_cmap
@@ -84,7 +83,7 @@ def preprocess(X, Y, axis_norm=(0,1)):
     return X, Y
 
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true jp-MarkdownHeadingCollapsed=true
+# %% [markdown]
 # ## Inspect the dataset
 
 # %%
@@ -107,7 +106,7 @@ x, y = preprocess(x, y)
 idx = 0
 plot_img_label(x[idx], y[idx])
 
-# %% [markdown] tags=[] jp-MarkdownHeadingCollapsed=true jp-MarkdownHeadingCollapsed=true
+# %% [markdown]
 # ## Object detection using a pre-trained neural network
 
 # %%
@@ -136,19 +135,50 @@ nms_thres = 0.6
 scale = (1.0, 1.0)
 pred = [model.predict_instances(xi, show_tile_progress=False, scale=scale, nms_thresh=nms_thres, prob_thresh=prob_thres, return_predict=True)
               for xi in tqdm(x)]
-detections = np.array([xi[0][0] for xi in pred])
-centers = [xi[0][1]["points"] for xi in pred]
-center_probs = [xi[0][1]["prob"] for xi in pred]
-prob_maps = np.stack([xi[1][0] for xi in pred])
+det = np.array([xi[0][0] for xi in pred])
+det_centers = [xi[0][1]["points"] for xi in pred]
+det_center_probs = [xi[0][1]["prob"] for xi in pred]
+det_prob_maps = np.stack([xi[1][0] for xi in pred])
+
+
+# %%
+def global_enumerate_detections(y, centers=None, center_probs=None):
+    offset = 1
+    global_centers = {}
+    global_center_probs = {}
+    for i in tqdm(range(len(y))):
+        y[i], fw, _ = skimage.segmentation.relabel_sequential(y[i], offset)
+        remap = list(fw.out_values)
+        try:
+            remap.remove(0)
+        except ValueError:
+            pass
+        
+        if centers is not None:
+            for k, v in zip(remap, centers[i]):
+                global_centers[k] = v
+                
+        if center_probs is not None:
+            for k, v in zip(remap, center_probs[i]):
+                global_center_probs[k] = v
+        
+        offset += len(remap)
+    
+    if center_probs is not None:
+        assert len(global_center_probs) == offset - 1
+        
+    return y, global_centers, global_center_probs
+
+det, det_centers, det_center_probs = global_enumerate_detections(det, det_centers, det_center_probs)
 
 # %%
 np.savez(
-    file=base_path / "detected.npz",
-    x=x,
-    y=y,
+    file=base_path / "detected_renumbered.npz",
+    img=x,
+    labels=y,
     links=links,
-    detections=detections,
-    centers=centers,
-    center_probs=center_probs,
-    prob_maps=prob_maps,
+    det=det,
+    det_centers=det_centers,
+    det_center_probs=det_center_probs,
+    det_prob_maps=det_prob_maps,
 )
