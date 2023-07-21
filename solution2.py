@@ -41,15 +41,12 @@
 # This notebook was originally written by Benjamin Gallusser.
 
 # %% [markdown]
-#
-
-# %% [markdown]
-# TODO remove
+# TODO into install.sh
 # 1. Obligatory conda install the following packages to solve the environment:
-#     - napari
-#     - jupyter-lab
-#     - conda install -c conda-forge -c gurobi -c funkelab ilpy
-# 1. Install motile directly from Github: `pip install git+https://github.com/funkelab/motile`
+#     - `conda install -c conda-forge napari`
+#     - `conda install -c conda-forge jupyter-lab`
+#     - `conda install -c conda-forge -c gurobi -c funkelab ilpy`
+# 1. Install motile directly from a GitHub branch (TODO finish feature branch and merge): `pip install git+https://github.com/funkelab/motile@add_flow_constraints`
 
 # %% [markdown]
 # ## Import packages
