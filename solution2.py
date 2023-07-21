@@ -18,6 +18,8 @@
 #
 # You could also run this notebook on your laptop, a GPU is not needed :).
 #
+# <center><img src="figures/ilp_nodiv.png" width="900"/></center>
+#
 # <div class="alert alert-danger">
 # Set your python kernel to <code>08-ilp-tracking</code>
 # </div>
@@ -37,6 +39,9 @@
 # ```
 #
 # This notebook was originally written by Benjamin Gallusser.
+
+# %% [markdown]
+#
 
 # %% [markdown]
 # TODO remove
@@ -655,7 +660,7 @@ if viewer:
 # Specifically, adapt one constraint and add costs for `Appear` and `Split` events, refer to [docs](https://funkelab.github.io/motile/api.html#costs)
 
 # %% [markdown]
-# Expected output: Capture at least one division.
+# Expected output: Capture at least one of the two divisions. Try to make sure that there are little or no false positive predictions.
 #
 # <img src="figures/ilp_div.png" width="300"/>
 
