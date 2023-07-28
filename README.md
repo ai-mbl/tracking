@@ -2,6 +2,8 @@
 
 This exercise was created by Benjamin Gallusser and Albert Dominguez Mantes.
 
+<img src="figures/tracking.gif" width="500"/><img src="figures/ilp_nodiv.png" width="500"/>
+
 ## Setup
 TODO
 
