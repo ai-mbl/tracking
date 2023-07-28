@@ -110,7 +110,7 @@ links
 # %%
 def visualize_tracks(viewer, y, links=None, name=""):
     """Utility function to visualize segmentation and tracks
-    
+
     Args:
         viewer: napari viewer
         y: labels: list of 2D arrays, each array is a label image.
@@ -179,7 +179,7 @@ if viewer:
 
 # %%
 def build_gt_graph(labels, links=None):
-    """ Build a ground truth graph from a list of labels and links.
+    """Build a ground truth graph from a list of labels and links.
 
     Args:
         labels: list of 2D arrays, each array is a label image
@@ -247,7 +247,7 @@ def build_gt_graph(labels, links=None):
 
 
 def build_graph(detections, max_distance, detection_probs=None, drift=(0, 0)):
-    """ Build a candidate graph from a list of detections.
+    """Build a candidate graph from a list of detections.
 
      Args:
         detections: list of 2D arrays, each array is a label image.
@@ -256,7 +256,7 @@ def build_graph(detections, max_distance, detection_probs=None, drift=(0, 0)):
         detection_probs: list of arrays, corresponding to ordered ids in detections.
         drift: (y, x) tuple for drift correction in euclidian distance feature.
     Returns:
-        G: motile.TrackGraph containing the candidate graph.        
+        G: motile.TrackGraph containing the candidate graph.
     """
 
     print("Build candidate graph")
@@ -276,7 +276,11 @@ def build_graph(detections, max_distance, detection_probs=None, drift=(0, 0)):
                 else 1
             )
             G.add_node(
-                r.label - 1, time=t, show=r.label, feature=feature, draw_position=draw_pos
+                r.label - 1,
+                time=t,
+                show=r.label,
+                feature=feature,
+                draw_position=draw_pos,
             )
 
     n_e = 0
@@ -323,8 +327,7 @@ candidate_graph = build_graph(
 
 # %%
 gt_edge_colors = [
-    (255, 140, 0) if "show" in edge else (0, 128, 0)
-    for edge in gt_graph.edges.values()
+    (255, 140, 0) if "show" in edge else (0, 128, 0) for edge in gt_graph.edges.values()
 ]
 
 fig_gt = draw_track_graph(
@@ -408,7 +411,7 @@ fig_candidate.show()
 # %%
 def print_solution_stats(solver, graph, gt_graph):
     """Prints the number of nodes and edges for candidate, ground truth graph, and solution graph.
-    
+
     Args:
         solver: motile.Solver, after calling solver.solve()
         graph: motile.TrackGraph, candidate graph
@@ -442,9 +445,10 @@ def print_solution_stats(solver, graph, gt_graph):
 #
 # Then we add a constraint on how many parents and children each node can be connected to in the solution, and some specific constraints for the network flow.
 
+
 # %%
 def solve_network_flow(graph, node_weight, edge_weight, max_flow):
-    """ Set up and solve the network flow problem.
+    """Set up and solve the network flow problem.
 
     Args:
         graph (motile.TrackGraph): The candidate graph.
@@ -459,10 +463,14 @@ def solve_network_flow(graph, node_weight, edge_weight, max_flow):
 
     # Add costs
     solver.add_costs(
-        motile.costs.NodeSelection(weight=node_weight, attribute="feature")  # Adapt this weight
+        motile.costs.NodeSelection(
+            weight=node_weight, attribute="feature"
+        )  # Adapt this weight
     )
     solver.add_costs(
-        motile.costs.EdgeSelection(weight=edge_weight, attribute="feature")  # Adapt this weight
+        motile.costs.EdgeSelection(
+            weight=edge_weight, attribute="feature"
+        )  # Adapt this weight
     )
 
     solver.add_constraints(motile.constraints.MaxParents(max_flow))
@@ -482,13 +490,13 @@ def solve_network_flow(graph, node_weight, edge_weight, max_flow):
 ### YOUR CODE HERE ###
 ######################
 
-node_weight = 1 # Adapt this weight
-edge_weight = 1 # Adapt this weight
+node_weight = 1  # Adapt this weight
+edge_weight = 1  # Adapt this weight
 max_flow = 4
 
-'''
+"""
 Explanation: ???
-'''
+"""
 
 # %% tags=["solution"]
 # Solution
@@ -497,13 +505,13 @@ node_weight = -1
 edge_weight = -1
 max_flow = 1
 
-'''
+"""
 Explanation: Since the ILP formulation is a minimization problem, the total weight of each node and edge needs to be negative.
 The cost of each node corresponds to its detection probability, so we can simply mulitply with `node_weight=-1`.
 The cost of each edge corresponds to 1 - distance between the two nodes, so agai we can simply mulitply with `edge_weight=-1`.
 
 Futhermore, each detection (node) should maximally be linked to one other detection in the previous and next frames, so we set `max_flow=1`.
-'''
+"""
 
 
 # %% [markdown]
@@ -640,7 +648,7 @@ if viewer:
 
 # %%
 def solve_ilp_birth(graph):
-    """ ILP allowing for appearance and disappearance of cells.
+    """ILP allowing for appearance and disappearance of cells.
 
     Args:
         graph (motile.TrackGraph): The candidate graph.
@@ -648,7 +656,7 @@ def solve_ilp_birth(graph):
     Returns:
         solver (motile.Solver): The solver.
     """
-    
+
     solver = motile.Solver(graph)
 
     # Add costs
@@ -672,8 +680,9 @@ def solve_ilp_birth(graph):
 # %% tags=["solution"]
 # Solution
 
+
 def solve_ilp_birth(graph):
-    """ ILP allowing for appearance and disappearance of cells.
+    """ILP allowing for appearance and disappearance of cells.
 
     Args:
         graph (motile.TrackGraph): The candidate graph.
@@ -772,7 +781,7 @@ if viewer:
 
 # %%
 def solve_full_ilp(graph):
-    """ ILP allowing for cell division.
+    """ILP allowing for cell division.
 
     Args:
         graph (motile.TrackGraph): The candidate graph.
@@ -802,8 +811,9 @@ def solve_full_ilp(graph):
 # %% tags=["solution"]
 # Solution
 
+
 def solve_full_ilp(graph):
-    """ ILP allowing for cell division.
+    """ILP allowing for cell division.
 
     Args:
         graph (motile.TrackGraph): The candidate graph.
