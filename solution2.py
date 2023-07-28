@@ -57,26 +57,11 @@ from IPython.display import display, HTML
 
 display(HTML("<style>.container { width:100% !important; }</style>"))
 
-# TODO remove unnecessary imports, automatically with black
-import sys
 import time
-from urllib.request import urlretrieve
 from pathlib import Path
-from collections import defaultdict
-from abc import ABC, abstractmethod
 
-import matplotlib
-import matplotlib.pyplot as plt
-
-# %matplotlib inline
-matplotlib.rcParams["image.interpolation"] = "none"
-matplotlib.rcParams["figure.figsize"] = (12, 6)
-from tifffile import imread, imwrite
-from tqdm.auto import tqdm
 import skimage
-from skimage.segmentation import relabel_sequential
 import pandas as pd
-import scipy
 import numpy as np
 import napari
 import networkx as nx
@@ -101,8 +86,6 @@ img = data["img"]
 labels = data["labels"]
 links = pd.DataFrame(data["links"], columns=["track_id", "from", "to", "parent_id"])
 det = data["det"]
-det_prob_maps = data["det_prob_maps"]
-det_centers = data["det_centers"][()]  # det_centers is a dictionary
 det_center_probs = data["det_center_probs"][()]  # det_center_probs is a dictionary
 
 # %% [markdown]
@@ -121,12 +104,21 @@ links
 # </div>
 
 # %% [markdown]
-# Here's a little convenience function to visualize the ground truth tracks
+# Here's a little convenience function to visualize the ground truth tracks.
 
 
 # %%
 def visualize_tracks(viewer, y, links=None, name=""):
-    """Utility function to visualize segmentation and tracks"""
+    """Utility function to visualize segmentation and tracks
+    
+    Args:
+        viewer: napari viewer
+        y: labels: list of 2D arrays, each array is a label image.
+        links: np.ndarray, each row is a link (parent, child, parent_frame, child_frame).
+
+    Returns:
+        tracks: np.ndarray, shape (N, 4)
+    """
     max_label = max(links.max(), y.max()) if links is not None else y.max()
     colorperm = np.random.default_rng(42).permutation(np.arange(1, max_label + 2))
     tracks = []
@@ -176,16 +168,25 @@ if viewer:
 # ## Build the ground truth graph, as well as a candidate graph from the detections
 
 # %% [markdown]
-# We will represent a linking problem as a [directed graph](https://en.wikipedia.org/wiki/Directed_graph) that contains all possible detections (graph nodes) and links (graph edges) between them. Then we remove certain nodes and edges using discrete optimization techniques such as an integer linear problem.
+# We will represent a linking problem as a [directed graph](https://en.wikipedia.org/wiki/Directed_graph) that contains all possible detections (graph nodes) and links (graph edges) between them.
+#
+# Then we remove certain nodes and edges using discrete optimization techniques such as an integer linear program (ILP).
 #
 # First of all, we will build and inspect two graphs:
-# - One for the ground truth data
-# - A candidate graph built from the detected cells in the video
+# - One for the ground truth data.
+# - A candidate graph built from the detected cells in the video.
 
 
 # %%
 def build_gt_graph(labels, links=None):
-    """TODO"""
+    """ Build a ground truth graph from a list of labels and links.
+
+    Args:
+        labels: list of 2D arrays, each array is a label image
+        links: np.ndarray, each row is a link (parent, child, parent_frame, child_frame).
+    Returns:
+        G: motile.TrackGraph containing the ground truth graph.
+    """
 
     print("Build ground truth graph")
     G = nx.DiGraph()
@@ -246,9 +247,17 @@ def build_gt_graph(labels, links=None):
 
 
 def build_graph(detections, max_distance, detection_probs=None, drift=(0, 0)):
-    """TODO
+    """ Build a candidate graph from a list of detections.
 
-    detection_probs: list of arrays, corresponding to ordered ids in detections."""
+     Args:
+        detections: list of 2D arrays, each array is a label image.
+            Labels are expected to be consecutive integers starting from 1, background is 0.
+        max distance: maximum distance between centroids of two detections to place a candidate edge.
+        detection_probs: list of arrays, corresponding to ordered ids in detections.
+        drift: (y, x) tuple for drift correction in euclidian distance feature.
+    Returns:
+        G: motile.TrackGraph containing the candidate graph.        
+    """
 
     print("Build candidate graph")
     G = nx.DiGraph()
@@ -261,13 +270,13 @@ def build_graph(detections, max_distance, detection_probs=None, drift=(0, 0)):
             if draw_pos in positions:
                 draw_pos += 3  # To avoid overlapping nodes
             positions.append(draw_pos)
-            weight = (
+            feature = (
                 np.round(detection_probs[r.label], decimals=2).item()
                 if detection_probs is not None
                 else 1
             )
             G.add_node(
-                r.label - 1, time=t, show=r.label, weight=weight, draw_position=draw_pos
+                r.label - 1, time=t, show=r.label, feature=feature, draw_position=draw_pos
             )
 
     n_e = 0
@@ -286,13 +295,12 @@ def build_graph(detections, max_distance, detection_probs=None, drift=(0, 0)):
                         _r0.label - 1,
                         _r1.label - 1,
                         # 1 - normalized euclidian distance
-                        weight=1
+                        feature=1
                         - np.round(
                             np.linalg.norm(_c0 + np.array(drift) - _c1) / max_distance,
                             decimals=3,
                         ).item(),
                         edge_id=n_e,
-                        # score=1,
                         show="?",
                     )
                     n_e += 1
@@ -310,6 +318,8 @@ candidate_graph = build_graph(
 
 # %% [markdown]
 # Let's visualize the two graphs.
+#
+# In the ground truth graph nodes that belong to the same linear tracklet are marked with the same id. The two divisions in the dataset are marked in yellow.
 
 # %%
 gt_edge_colors = [
@@ -339,7 +349,9 @@ fig_gt.show()
 # %% [markdown]
 # You can hover over the nodes and edges of the candidate graph to inspect their features.
 #
-# The nodes' `weight` is set to their detection probability, and the edges' `weight` to 1 - normalized_detection_distance, which is also visualized as their color saturation.
+# In contrast to the ground truth graph above, in the candidate graph, nodes have unique IDs.
+#
+# The nodes' `feature` is set to their detection probability, and the edges' `feature` to 1 - normalized_detection_distance, which is also visualized as their color saturation.
 
 # %%
 fig_candidate = draw_track_graph(
@@ -348,7 +360,7 @@ fig_candidate = draw_track_graph(
     width=1000,
     height=500,
     label_attribute="show",
-    alpha_attribute="weight",
+    alpha_attribute="feature",
     node_size=25,
 )
 fig_candidate = fig_candidate.update_layout(
@@ -370,9 +382,11 @@ fig_candidate.show()
 # The first algorithm we will use to do this is a [network flow](https://en.wikipedia.org/wiki/Network_flow_problem). It tries to find as many disjunct paths from the first frame to the last frame as possible. All other vertices and edges are discarded. This specific algorithm is called maximum flow.
 #
 #
-# Finding a good subgraph $\tilde{G}=(\tilde{V}, \tilde{E})$ can be formulated as an [integer linear program (ILP)](https://en.wikipedia.org/wiki/Integer_programming) (also, refer to the tracking lecture slides), where we assign a binary variable $x$ and a cost $c$ to each vertex and edge in $G$, and then computing $min_x c^Tx$. A set of linear constraints ensure that the solution will be a feasible graph. For example, if an edge is part of $\tilde{G}$, both its incident nodes have to be part of $\tilde{G}$ as well.
+# Finding a good subgraph $\tilde{G}=(\tilde{V}, \tilde{E})$ can be formulated as an [integer linear program (ILP)](https://en.wikipedia.org/wiki/Integer_programming) (also, refer to the tracking lecture slides), where we assign a binary variable $x$ and a cost $c$ to each vertex and edge in $G$, and then computing $min_x c^Tx$.
 #
-# Here we want to express the network flow as an ILP using `motile` ([docs here](https://funkelab.github.io/motile/)), a convenient wrapper around solving linking with an ILP.
+# A set of linear constraints ensures that the solution will be a feasible cell tracking graph. For example, if an edge is part of $\tilde{G}$, both its incident nodes have to be part of $\tilde{G}$ as well.
+#
+# Here we want to express the network flow as an ILP using `motile` ([docs here](https://funkelab.github.io/motile/)), a convenient wrapper around linking with an ILP.
 
 # %% [markdown]
 # ## Exercise 2.1 - Network flow
@@ -381,18 +395,25 @@ fig_candidate.show()
 #
 # Try different values for `node_weight`, `edge_weight` and `max_flow` and try to get an output similar to the plot right below.
 #
-# Give a short explanation why your found parameters work.
+# Give a short explanation why your parameters work.
 
 # %% [markdown]
 # <img src="figures/network_flow.png" width="700"/>
 
 
 # %% [markdown]
-# A utility function to gauge some statistics of a solution.
+# Here is a utility function to gauge some statistics of a solution.
 
 
 # %%
 def print_solution_stats(solver, graph, gt_graph):
+    """Prints the number of nodes and edges for candidate, ground truth graph, and solution graph.
+    
+    Args:
+        solver: motile.Solver, after calling solver.solve()
+        graph: motile.TrackGraph, candidate graph
+        gt_graph: motile.TrackGraph, ground truth graph
+    """
     time.sleep(0.1)  # to wait for ilpy prints
     print(
         f"\nCandidate graph\t\t{len(graph.nodes):3} nodes\t{len(graph.edges):3} edges"
@@ -414,16 +435,34 @@ def print_solution_stats(solver, graph, gt_graph):
     print(f"Solution graph\t\t{nodes:3} nodes\t{edges:3} edges")
 
 
+# %% [markdown]
+# This is the actual formulation of the network flow.
+#
+# First we associate costs for each node and weight to be picked, which are a product of `weight` and `attribute`.
+#
+# Then we add a constraint on how many parents and children each node can be connected to in the solution, and some specific constraints for the network flow.
+
 # %%
 def solve_network_flow(graph, node_weight, edge_weight, max_flow):
+    """ Set up and solve the network flow problem.
+
+    Args:
+        graph (motile.TrackGraph): The candidate graph.
+        node_weight (float): The weighting factor of the node selection cost.
+        edge_weight (float): The weighting factor of the edge selection cost.
+        max_flow (int): The maximum number of incoming and outgoing edges in the solution.
+
+    Returns:
+        motile.Solver: The solver object, ready to be inspected.
+    """
     solver = motile.Solver(graph)
 
     # Add costs
     solver.add_costs(
-        motile.costs.NodeSelection(weight=node_weight, attribute="weight")  # Adapt this weight
+        motile.costs.NodeSelection(weight=node_weight, attribute="feature")  # Adapt this weight
     )
     solver.add_costs(
-        motile.costs.EdgeSelection(weight=edge_weight, attribute="weight")  # Adapt this weight
+        motile.costs.EdgeSelection(weight=edge_weight, attribute="feature")  # Adapt this weight
     )
 
     solver.add_constraints(motile.constraints.MaxParents(max_flow))
@@ -466,6 +505,9 @@ The cost of each edge corresponds to 1 - distance between the two nodes, so agai
 Futhermore, each detection (node) should maximally be linked to one other detection in the previous and next frames, so we set `max_flow=1`.
 '''
 
+
+# %% [markdown]
+# Here we actually run the optimization, and compare the found solution to the ground truth.
 
 # %%
 flow = solve_network_flow(candidate_graph, node_weight, edge_weight, max_flow)
@@ -578,13 +620,16 @@ if viewer:
 
 # %% [markdown]
 # ## Checkpoint 1
-# <div class="alert alert-block alert-success"><h3>Checkpoint 1: We have familiarized ourselves with the formulation of linking as a graph-based optimization and have a feasible solution to a network flow.</h3></div>
+# <div class="alert alert-block alert-success"><h3>Checkpoint 1: We have familiarized ourselves with the formulation of linking as a graph-based optimization problem and have an solution found by an efficient network flow formulation.</h3>
+#
+# However, in the video at hand there are cells coming into the field of view from below. To track these, we need change the optimization problem to allow for appearing and disappearing object at any timepoint.
+# </div>
 
 # %% [markdown]
 # ## Exercise 2.2 - ILP with track birth and death
-# <div class="alert alert-block alert-info"><h3>Exercise 2.2: Adapt the network flow from Exercise 2.1 such that tracks can start and end at arbitrary time points</h3>
+# <div class="alert alert-block alert-info"><h3>Exercise 2.2: Adapt the network flow from Exercise 2.1 such that tracks can start and end at arbitrary time points.</h3>
 #
-# Hint: you will have to remove some constraints.
+# Hint: You will have to add both costs and constraints to the template below.
 # </div>
 
 # %% [markdown]
@@ -595,6 +640,15 @@ if viewer:
 
 # %%
 def solve_ilp_birth(graph):
+    """ ILP allowing for appearance and disappearance of cells.
+
+    Args:
+        graph (motile.TrackGraph): The candidate graph.
+
+    Returns:
+        solver (motile.Solver): The solver.
+    """
+    
     solver = motile.Solver(graph)
 
     # Add costs
@@ -618,21 +672,28 @@ def solve_ilp_birth(graph):
 # %% tags=["solution"]
 # Solution
 
-
 def solve_ilp_birth(graph):
+    """ ILP allowing for appearance and disappearance of cells.
+
+    Args:
+        graph (motile.TrackGraph): The candidate graph.
+
+    Returns:
+        solver (motile.Solver): The solver.
+    """
     solver = motile.Solver(graph)
 
     # Add costs
     solver.add_costs(
         motile.costs.NodeSelection(
             weight=-1,
-            attribute="weight",
+            attribute="feature",
         )
     )
     solver.add_costs(
         motile.costs.EdgeSelection(
             weight=-1,
-            attribute="weight",
+            attribute="feature",
         )
     )
 
@@ -644,6 +705,9 @@ def solve_ilp_birth(graph):
 
     return solver
 
+
+# %% [markdown]
+# Run the optimization, and compare the found solution to the ground truth.
 
 # %%
 with_birth = solve_ilp_birth(candidate_graph)
@@ -699,18 +763,28 @@ if viewer:
 # Specifically, adapt one constraint and add costs for `Appear` and `Split` events, refer to [docs](https://funkelab.github.io/motile/api.html#costs)
 
 # %% [markdown]
-# Expected output: Capture at least one of the two divisions. Try to make sure that there are little or no false positive predictions.
+# Expected output: **Capture at least one of the two divisions**.
+#
+# Try to make sure that there are little or no false positive predictions.
 #
 # <img src="figures/ilp_div.png" width="300"/>
 
 
 # %%
 def solve_full_ilp(graph):
+    """ ILP allowing for cell division.
+
+    Args:
+        graph (motile.TrackGraph): The candidate graph.
+
+    Returns:
+        solver (motile.Solver): The solver.
+    """
     solver = motile.Solver(graph)
 
     # Add costs
-    solver.add_costs(motile.costs.NodeSelection(weight=-1, attribute="weight"))
-    solver.add_costs(motile.costs.EdgeSelection(weight=-1, attribute="weight"))
+    solver.add_costs(motile.costs.NodeSelection(weight=-1, attribute="feature"))
+    solver.add_costs(motile.costs.EdgeSelection(weight=-1, attribute="feature"))
 
     ######################
     ### YOUR CODE HERE ###
@@ -728,13 +802,20 @@ def solve_full_ilp(graph):
 # %% tags=["solution"]
 # Solution
 
-
 def solve_full_ilp(graph):
+    """ ILP allowing for cell division.
+
+    Args:
+        graph (motile.TrackGraph): The candidate graph.
+
+    Returns:
+        solver (motile.Solver): The solver.
+    """
     solver = motile.Solver(graph)
 
     # Add costs
-    solver.add_costs(motile.costs.NodeSelection(weight=-1, attribute="weight"))
-    solver.add_costs(motile.costs.EdgeSelection(weight=-1, attribute="weight"))
+    solver.add_costs(motile.costs.NodeSelection(weight=-1, attribute="feature"))
+    solver.add_costs(motile.costs.EdgeSelection(weight=-1, attribute="feature"))
     solver.add_costs(motile.costs.Appear(constant=0.75))
     solver.add_costs(motile.costs.Split(constant=1.5))
 
