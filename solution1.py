@@ -18,6 +18,8 @@
 #
 # You could also run this notebook on your laptop, a GPU is not needed.
 #
+# ![](figures/tracking.gif "tracking")
+#
 # <div class="alert alert-danger">
 # Set your python kernel to <code>08-tracking</code>
 # </div>
