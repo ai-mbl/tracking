@@ -639,7 +639,7 @@ assert (
 print("Success :)")
 
 
-# %% [markdown] jp-MarkdownHeadingCollapsed=true
+# %% [markdown]
 # ## Linking
 
 # %% [markdown]
@@ -765,7 +765,7 @@ class FrameByFrameLinker:
                     "deaths": List of ids.
                 Ids are one-based, 0 is reserved for background.
             Returns:
-                TODO
+                Numpy array of shape (t,x,y) with relabeled instance ids.
         """
         detections = detections.copy()
 

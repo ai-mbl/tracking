@@ -41,14 +41,6 @@
 # This notebook was originally written by Benjamin Gallusser.
 
 # %% [markdown]
-# TODO into install.sh
-# 1. Obligatory conda install the following packages to solve the environment:
-#     - `conda install -c conda-forge napari`
-#     - `conda install -c conda-forge jupyter-lab`
-#     - `conda install -c conda-forge -c gurobi -c funkelab ilpy`
-# 1. Install motile from GitHub `pip install git+https://github.com/funkelab/motile`.
-
-# %% [markdown]
 # ## Import packages
 
 # %%
@@ -571,7 +563,7 @@ def solution2graph(solver, base_graph):
 
 # %%
 def recolor_segmentation(segmentation, graph, det_attribute="show"):
-    """TODO"""
+    """ """
     out = []
     n_tracks = 1
     color_lookup_tables = []

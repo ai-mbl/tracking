@@ -5,7 +5,17 @@ This exercise was created by Benjamin Gallusser and Albert Dominguez Mantes.
 <img src="figures/tracking.gif" width="500"/><img src="figures/ilp_nodiv.png" width="500"/>
 
 ## Setup
-TODO
+1. Go into the folder with this repo and run
+    ```
+    bash setup.sh
+    ```
+
+2. Run
+    ```
+    jupyter lab
+    ```
+    , double-click on the `exercise{1|2|3}.ipynb` files and follow the instructions in the notebook.
+
 
 ## Exercises
 
@@ -39,6 +49,3 @@ Here we will use an extended version of the tracking algorithm introduced in exe
 You will learn
 - how this formulation addresses **typical challenges of tracking in bioimages**, like cell division and objects temporarily going out of focus.
 - How to use **Trackmate**, a versatile ready-to-go implementation of two-step LAP tracking in `ImageJ/Fiji`.
-
-
-    
