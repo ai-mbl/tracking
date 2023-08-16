@@ -26,6 +26,7 @@ source $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
 python3 -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
 ###########################
 
+pip install numpy<1.25
 pip install stardist
 pip install ipywidgets
 
