@@ -62,6 +62,11 @@ import motile
 from motile.plot import draw_track_graph, draw_solution
 from utils import InOutSymmetry, MinTrackLength
 
+import traccuracy
+from traccuracy import run_metrics
+from traccuracy.matchers import CTCMatched
+from traccuracy.metrics import CTCMetrics, DivisionMetrics
+
 # Pretty tqdm progress bars
 # ! jupyter nbextension enable --py widgetsnbextension
 
@@ -177,7 +182,8 @@ def build_gt_graph(labels, links=None):
         labels: list of 2D arrays, each array is a label image
         links: np.ndarray, each row is a link (parent, child, parent_frame, child_frame).
     Returns:
-        G: motile.TrackGraph containing the ground truth graph.
+        trackgraph: motile.TrackGraph containing the ground truth graph.
+        G: networkx.DiGraph containing the ground truth graph.
     """
 
     print("Build ground truth graph")
@@ -194,7 +200,14 @@ def build_gt_graph(labels, links=None):
             if draw_pos in positions:
                 draw_pos += 3  # To avoid overlapping nodes
             positions.append(draw_pos)
-            G.add_node(n_v, time=t, show=r.label, draw_position=draw_pos)
+            G.add_node(
+                n_v,
+                time=t,
+                show=r.label,
+                draw_position=draw_pos,
+                y=int(r.centroid[0]),
+                x=int(r.centroid[1]),
+            )
             lut[r.label] = n_v
             n_v += 1
         luts.append(lut)
@@ -215,6 +228,7 @@ def build_gt_graph(labels, links=None):
                         luts[t][_r0.label],
                         luts[t + 1][_r1.label],
                         edge_id=n_e,
+                        is_intertrack_edge=0,
                     )
                     n_e += 1
 
@@ -228,14 +242,15 @@ def build_gt_graph(labels, links=None):
                         luts[d[1]][d[0]],
                         edge_id=n_e,
                         show="DIV",
+                        is_intertrack_edge=1,
                     )
                     n_e += 1
                 except KeyError:
                     pass
 
-    G = motile.TrackGraph(G, frame_attribute="time")
+    trackgraph = motile.TrackGraph(G, frame_attribute="time")
 
-    return G
+    return trackgraph, G
 
 
 def build_graph(detections, max_distance, detection_probs=None, drift=(0, 0)):
@@ -273,6 +288,8 @@ def build_graph(detections, max_distance, detection_probs=None, drift=(0, 0)):
                 show=r.label,
                 feature=feature,
                 draw_position=draw_pos,
+                y=int(r.centroid[0]),
+                x=int(r.centroid[1]),
             )
 
     n_e = 0
@@ -307,7 +324,7 @@ def build_graph(detections, max_distance, detection_probs=None, drift=(0, 0)):
 
 
 # %%
-gt_graph = build_gt_graph(labels, links.to_numpy())
+gt_graph, gt_nx_graph = build_gt_graph(labels, links.to_numpy())
 candidate_graph = build_graph(
     det, max_distance=50, detection_probs=det_center_probs, drift=(-4, 0)
 )
@@ -539,31 +556,68 @@ fig_gt.show()
 
 
 # %%
-def solution2graph(solver, base_graph):
-    new_graph = nx.DiGraph()
+def solution2graph(solver, base_graph, detections, label_key="show"):
+    """Convert a solver solution to a graph and corresponding dense selected detections.
+
+    Args:
+        solver: A solver instance
+        base_graph: The base graph
+        detections: The detections
+        label_key: The key of the label in the detections
+    Returns:
+        track_graph: Solution as motile.TrackGraph
+        graph: Solution as networkx graph
+        selected_detections: Dense label array containing only selected detections
+    """
+    graph = nx.DiGraph()
     node_indicators = solver.get_variables(motile.variables.NodeSelected)
     edge_indicators = solver.get_variables(motile.variables.EdgeSelected)
+
+    selected_detections = np.zeros_like(detections)
 
     # Build nodes
     for node, index in node_indicators.items():
         if solver.solution[index] > 0.5:
             node_features = base_graph.nodes[node]
-            new_graph.add_node(node, **node_features)
+            graph.add_node(node, **node_features)
+            t = node_features[base_graph.frame_attribute]
+            selected_detections[t][
+                detections[t] == node_features[label_key]
+            ] = node_features[label_key]
 
     # Build edges
     for edge, index in edge_indicators.items():
         if solver.solution[index] > 0.5:
             # print(base_graph.edges[edge])
-            new_graph.add_edge(*edge, **base_graph.edges[edge])
+            graph.add_edge(*edge, **base_graph.edges[edge])
 
-    track_graph = motile.TrackGraph(new_graph, frame_attribute="time")
+    # Add cell division markers on edges for traccuracy
+    for (u, v), features in graph.edges.items():
+        out_edges = graph.out_edges(u)
+        if len(out_edges) == 2:
+            features["is_intertrack_edge"] = 1
+        elif len(out_edges) == 1:
+            features["is_intertrack_edge"] = 0
+        else:
+            raise ValueError()
 
-    return track_graph
+    track_graph = motile.TrackGraph(graph, frame_attribute="time")
+
+    return track_graph, graph, selected_detections
 
 
 # %%
 def recolor_segmentation(segmentation, graph, det_attribute="show"):
-    """ """
+    """Recolor a segmentation based on a graph, such that each cell and its daughter cells have a unique color.
+
+    Args:
+        segmentation (np.ndarray): Predicted dense segmentation.
+        graph (motile.TrackGraph): A directed graph representing the tracks.
+        det_attribute (str): The attribute of the graph nodes that corresponds to ids in `segmentation`.
+
+    Returns:
+        out (np.ndarray): A recolored segmentation.
+    """
     out = []
     n_tracks = 1
     color_lookup_tables = []
@@ -596,12 +650,15 @@ def recolor_segmentation(segmentation, graph, det_attribute="show"):
         color_lookup_tables.append(color_lut)
         out.append(new_frame)
 
-    return np.stack(out)
+    out = np.stack(out)
+    return out
 
 
 # %%
 recolored_gt = recolor_segmentation(labels, gt_graph)
-det_flow = recolor_segmentation(det, graph=solution2graph(flow, candidate_graph))
+recolored_flow = recolor_segmentation(
+    det, graph=solution2graph(flow, candidate_graph, det)[0]
+)
 
 viewer = napari.viewer.current_viewer()
 if viewer:
@@ -609,7 +666,7 @@ if viewer:
 viewer = napari.Viewer()
 viewer.add_image(img)
 viewer.add_labels(recolored_gt)
-viewer.add_labels(det_flow)
+viewer.add_labels(recolored_flow)
 viewer.grid.enabled = True
 
 # %%
@@ -617,6 +674,60 @@ viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
 
+
+# %% [markdown]
+# ### Metrics
+#
+# We were able to understand via plotting the solution graph as well as visualizing the predicted tracks on the images that the network flow solution is far from perfect for this problem.
+#
+# Additionally, we would also like to quantify this. We will use the package [`traccuracy`](https://traccuracy.readthedocs.io/en/latest/) to calculate some [standard metrics for cell tracking](http://celltrackingchallenge.net/evaluation-methodology/). For example, a high-level indicator for tracking performance is called TRA.
+#
+# If you're interested in more detailed metrics, you can check out for example the false positive (FP) and false negative (FN) nodes, edges and division events.
+
+
+# %%
+def get_metrics(gt_graph, labels, pred_graph, pred_segmentation):
+    """Calculate metrics for linked tracks by comparing to ground truth.
+
+    Args:
+        gt_graph (networkx.DiGraph): Ground truth graph.
+        labels (np.ndarray): Ground truth detections.
+        pred_graph (networkx.DiGraph): Predicted graph.
+        pred_segmentation (np.ndarray): Predicted dense segmentation.
+
+    Returns:
+        results (dict): Dictionary of metric results.
+    """
+
+    gt_graph = traccuracy.TrackingGraph(
+        graph=gt_graph,
+        frame_key="time",
+        label_key="show",
+        location_keys=("x", "y"),
+    )
+    gt_data = traccuracy.TrackingData(gt_graph, segmentation=labels)
+
+    pred_graph = traccuracy.TrackingGraph(
+        graph=pred_graph,
+        frame_key="time",
+        label_key="show",
+        location_keys=("x", "y"),
+    )
+    pred_data = traccuracy.TrackingData(pred_graph, segmentation=pred_segmentation)
+
+    results = run_metrics(
+        gt_data=gt_data,
+        pred_data=pred_data,
+        matcher=CTCMatched,
+        metrics=[CTCMetrics, DivisionMetrics],
+    )
+
+    return results
+
+
+# %%
+_, flow_nx_graph, flow_det = solution2graph(flow, candidate_graph, det)
+get_metrics(gt_nx_graph, labels, flow_nx_graph, flow_det)
 
 # %% [markdown]
 # ## Checkpoint 1
@@ -736,7 +847,9 @@ fig_gt.show()
 
 # %%
 recolored_gt = recolor_segmentation(labels, gt_graph)
-det_birth = recolor_segmentation(det, graph=solution2graph(with_birth, candidate_graph))
+recolored_birth = recolor_segmentation(
+    det, graph=solution2graph(with_birth, candidate_graph, det)[0]
+)
 
 viewer = napari.viewer.current_viewer()
 if viewer:
@@ -744,7 +857,7 @@ if viewer:
 viewer = napari.Viewer()
 viewer.add_image(img)
 viewer.add_labels(recolored_gt)
-viewer.add_labels(det_birth)
+viewer.add_labels(recolored_birth)
 viewer.grid.enabled = True
 
 # %%
@@ -752,6 +865,10 @@ viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
 
+
+# %%
+_, birth_graph, birth_det = solution2graph(with_birth, candidate_graph, det)
+get_metrics(gt_nx_graph, labels, birth_graph, birth_det)
 
 # %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## ILP model including divisions
@@ -856,7 +973,9 @@ fig_gt.show()
 
 # %%
 recolored_gt = recolor_segmentation(labels, gt_graph)
-det_ilp = recolor_segmentation(det, graph=solution2graph(full_ilp, candidate_graph))
+recolored_ilp = recolor_segmentation(
+    det, graph=solution2graph(full_ilp, candidate_graph, det)[0]
+)
 
 viewer = napari.viewer.current_viewer()
 if viewer:
@@ -864,13 +983,17 @@ if viewer:
 viewer = napari.Viewer()
 viewer.add_image(img)
 viewer.add_labels(recolored_gt)
-viewer.add_labels(det_ilp)
+viewer.add_labels(recolored_ilp)
 viewer.grid.enabled = True
 
 # %%
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
+
+# %%
+_, ilp_graph, ilp_det = solution2graph(full_ilp, candidate_graph, det)
+get_metrics(gt_nx_graph, labels, ilp_graph, ilp_det)
 
 # %% [markdown]
 # ## Exercise 2.4 (Bonus)

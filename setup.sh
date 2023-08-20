@@ -48,6 +48,7 @@ mamba activate 08-ilp-tracking
 mamba install -y -c conda-forge napari
 mamba install -y -c conda-forge -c gurobi -c funkelab ilpy
 pip install git+https://github.com/funkelab/motile
+pip install traccuracy
 pip install plotly
 pip install ipywidgets
 
