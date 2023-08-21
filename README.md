@@ -7,17 +7,18 @@ This exercise was created by Benjamin Gallusser and Albert Dominguez Mantes.
 ## Setup
 1. Go into the folder with this repo and run
     ```
-    bash setup.sh
+    source setup.sh
     ```
-
-2. Run
+    to set up the environments for this exercise. This will take a few minutes.
+   
+1. Run
     ```
     jupyter lab
     ```
     , double-click on the `exercise{1|2|3}.ipynb` files and follow the instructions in the notebook.
 
 
-## Exercises
+## Overview
 
 ### 1. Tracking by detection and simple frame by frame matching
 
@@ -30,6 +31,7 @@ You will learn
 - to compute optimal frame-by-frame linking by setting up a **bipartite matching problem** and using a python-based solver (Exercise 1.7).
 - to compute suitable object **features** for the object linking process with `scikit-image` (Exercise 1.8).
 
+
 ### 2. Tracking with an integer linear program (ILP)
 
 Here we will introduce a modern formulation of tracking-by-detection.
@@ -39,7 +41,6 @@ You will learn
 - to adapt the previous formulation to allow for **arbitrary track starting and ending points** (Exercise 2.2).
 - to extend the ILP to properly model **cell divisions** (Exercise 2.3).
 - to tune the **hyperparameters** of the ILP (Exercise 2.4, bonus).
-
 
 
 ### 3. Bonus: Tracking with two-step Linear Assignment Problem (LAP)
