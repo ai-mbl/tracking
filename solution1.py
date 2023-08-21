@@ -122,7 +122,7 @@ def preprocess(X, Y, axis_norm=(0, 1)):
 # ## Inspect the dataset
 
 # %% [markdown]
-# For this exercise we will be working with a fluorenscence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA). It is similar to the dataset at https://zenodo.org/record/4034976#.YwZRCJPP1qt.
+# For this exercise we will be working with a fluorescence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA). It is similar to the dataset at https://zenodo.org/record/4034976#.YwZRCJPP1qt.
 
 # %%
 base_path = Path("data/exercise1")
@@ -291,7 +291,9 @@ def extract_divisions(img_labels, links):
     """
 
     img_divisions = np.zeros_like(img_labels)
-    daughters = links[links.parent_id != 0]
+    daughters = links[
+        links.parent_id != 0
+    ]  # identify daughters i.e. links whose parent_id is not zero
 
     for _, d in daughters.iterrows():
         ######################
@@ -339,7 +341,7 @@ def extract_divisions(img_labels, links):
 def test_extract_divisions():
     y = np.array([[0, 10, 0, 0], [0, 11, 12, 13], [0, 11, 12, 13], [0, 11, 0, 13]])
     links = pd.DataFrame(
-        [[11, 1, 2, 10], [12, 1, 3, 10]],
+        [[11, 1, 3, 10], [12, 1, 2, 10]],
         columns=["track_id", "from", "to", "parent_id"],
     )
     divs = extract_divisions(y, links)
