@@ -1,12 +1,13 @@
 # ---
 # jupyter:
 #   jupytext:
+#     cell_metadata_filter: all
 #     formats: ipynb,py:percent
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.14.5
+#       jupytext_version: 1.15.0
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -42,10 +43,10 @@
 #
 # This notebook was originally written by Benjamin Gallusser.
 
-# %% [markdown] jp-MarkdownHeadingCollapsed=true editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true jp-MarkdownHeadingCollapsed=true slideshow={"slide_type": ""}
 # ## Import packages
 
-# %% editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} trusted=true
 # Force keras to run on CPU
 import os
 
@@ -91,7 +92,7 @@ lbl_cmap = random_label_cmap()
 # Some utility functions
 
 
-# %% editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} trusted=true
 def plot_img_label(img, lbl, img_title="image", lbl_title="label", **kwargs):
     fig, (ai, al) = plt.subplots(1, 2, gridspec_kw=dict(width_ratios=(1, 1)))
     im = ai.imshow(img, cmap="gray", clim=(0, 1))
@@ -124,13 +125,13 @@ def preprocess(X, Y, axis_norm=(0, 1)):
 # %% [markdown]
 # For this exercise we will be working with a fluorescence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA). It is similar to the dataset at https://zenodo.org/record/4034976#.YwZRCJPP1qt.
 
-# %%
+# %% trusted=true
 base_path = Path("data/exercise1")
 
 # %% [markdown]
 # Load the dataset (images and tracking annotations) from disk into this notebook.
 
-# %%
+# %% trusted=true
 x = np.stack(
     [imread(xi) for xi in sorted((base_path / "images").glob("*.tif"))]
 )  # images
@@ -145,14 +146,14 @@ x, y = preprocess(x, y)
 # %% [markdown]
 # Let's visualize some images (by changing `idx`).
 
-# %%
+# %% trusted=true
 idx = 0
 plot_img_label(x[idx], y[idx])
 
 # %% [markdown]
 # This is ok to take a glimpse, but a dynamic viewer would be much better to understand how cells move. Let's use [napari](https://napari.org/tutorials/fundamentals/getting_started.html) for this. Napari is a wonderful viewer for imaging data that you can interact with in python, even directly out of jupyter notebooks.
 
-# %%
+# %% trusted=true
 viewer = napari.Viewer()
 viewer.add_image(x, name="image")
 
@@ -170,7 +171,7 @@ viewer.add_image(x, name="image")
 # %% [markdown]
 # Let's add the ground truth annotations.
 
-# %%
+# %% trusted=true
 viewer.add_labels(y, name="labels")
 
 # %% [markdown]
@@ -180,7 +181,7 @@ viewer.add_labels(y, name="labels")
 #
 # If you look carefully, you will see that there are some cell divisions in this dataset, and the annotation color of the daughter cells does not match the color of the parent cell. This information is stored in an additional table, which we will load now.
 
-# %%
+# %% trusted=true
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
@@ -188,7 +189,7 @@ if viewer:
 # %% [markdown]
 # Let's load in the cell divisions.
 
-# %%
+# %% trusted=true
 links = np.loadtxt(base_path / "gt_tracking" / "man_track.txt", dtype=int)
 links = pd.DataFrame(data=links, columns=["track_id", "from", "to", "parent_id"])
 print("Links")
@@ -208,7 +209,7 @@ links[:10]
 # Here is a function to visualize the tracks of cells over time, including cell divisions. Note that the color of the track is also random and does not match the color of the corresponding spot.
 
 
-# %%
+# %% trusted=true
 def visualize_tracks(viewer, y, links=None, name=""):
     """Utility function to visualize segmentation and tracks"""
     max_label = max(links.max(), y.max()) if links is not None else y.max()
@@ -240,7 +241,7 @@ def visualize_tracks(viewer, y, links=None, name=""):
     return tracks
 
 
-# %%
+# %% trusted=true
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
@@ -248,7 +249,7 @@ viewer = napari.Viewer()
 viewer.add_image(x)
 visualize_tracks(viewer, y, links.to_numpy(), "ground_truth")
 
-# %%
+# %% trusted=true
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
@@ -273,7 +274,7 @@ if viewer:
 # </figure>
 
 
-# %%
+# %% trusted=true
 def extract_divisions(img_labels, links):
     """Function to highlight divisions.
 
@@ -304,7 +305,7 @@ def extract_divisions(img_labels, links):
     return img_divisions
 
 
-# %% editable=true slideshow={"slide_type": ""} tags=["solution"]
+# %% editable=true slideshow={"slide_type": ""} tags=["solution"] trusted=true
 # Solution Exercise 1.1
 def extract_divisions(img_labels, links):
     """Function to highlight divisions.
@@ -337,7 +338,7 @@ def extract_divisions(img_labels, links):
 # Test your function with this minimal example (with 1D toy "images" of shape (time, height)).
 
 
-# %% editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} trusted=true
 def test_extract_divisions():
     y = np.array([[0, 10, 0, 0], [0, 11, 12, 13], [0, 11, 12, 13], [0, 11, 0, 13]])
     links = pd.DataFrame(
@@ -357,7 +358,7 @@ test_extract_divisions()
 # %% [markdown]
 # Visualize the output of your function:
 
-# %%
+# %% trusted=true
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
@@ -366,7 +367,7 @@ viewer.add_image(x)
 divisions = extract_divisions(y, links)
 viewer.add_labels(divisions, name="divisions")
 
-# %%
+# %% trusted=true
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
@@ -384,7 +385,7 @@ if viewer:
 #
 # [Schmidt, Uwe, et al. "Cell detection with star-convex polygons." MICCAI, 2018.](https://link.springer.com/chapter/10.1007/978-3-030-00934-2_30)
 
-# %%
+# %% trusted=true
 idx = 0
 model = StarDist2D.from_pretrained("2D_versatile_fluo")
 (detections, details), (prob, _) = model.predict_instances(
@@ -395,7 +396,7 @@ plot_img_label(x[idx], detections, lbl_title="detections")
 # %% [markdown]
 # Here we visualize in detail the polygons we have detected with StarDist.
 
-# %% editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} trusted=true
 coord, points, polygon_prob = details["coord"], details["points"], details["prob"]
 plt.figure(figsize=(24, 12))
 plt.subplot(121)
@@ -425,7 +426,7 @@ plt.show()
 # %% [markdown]
 # Detect centers and segment nuclei in all images of the time lapse.
 
-# %%
+# %% trusted=true
 scale = (1.0, 1.0)
 pred = [
     model.predict_instances(xi, show_tile_progress=False, scale=scale) for xi in tqdm(x)
@@ -439,7 +440,7 @@ centers = [xi[1]["points"] for xi in pred]
 # %% [markdown]
 # Visualize the dense detections. Note that they are still not linked and therefore randomly colored.
 
-# %%
+# %% trusted=true
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
@@ -447,7 +448,7 @@ viewer = napari.Viewer()
 viewer.add_image(x)
 viewer.add_labels(detections, name=f"detections_scale_{scale}")
 
-# %%
+# %% trusted=true
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
@@ -455,7 +456,7 @@ if viewer:
 # %% [markdown]
 # We see that the number of detections increases over time, corresponding to the cells that insert the field of view from below during the video.
 
-# %% editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} trusted=true
 plt.figure(figsize=(10, 6))
 plt.bar(range(len(centers)), [len(xi) for xi in centers])
 plt.title(f"Number of detections in each frame (scale={scale})")
@@ -482,7 +483,7 @@ plt.show()
 # <div class="alert alert-block alert-info"><h3>Exercise 1.3: Write a function that computes pairwise euclidian distances given two lists of points, with two simple for-loops.</h3></div>
 
 
-# %% editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} trusted=true
 def pairwise_euclidian_distance(points0, points1):
     """Computes pairwise euclidian distances of two lists of points.
 
@@ -500,7 +501,7 @@ def pairwise_euclidian_distance(points0, points1):
     return dists
 
 
-# %% editable=true slideshow={"slide_type": ""} tags=["solution"]
+# %% editable=true slideshow={"slide_type": ""} tags=["solution"] trusted=true
 # Solution Exercise 1.3
 def pairwise_euclidian_distance(points0, points1):
     # Iterative pairwise euclidian distance
@@ -529,15 +530,15 @@ def pairwise_euclidian_distance(points0, points1):
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # Here are two (almost random ;)) lists of points to test your function on.
 
-# %% editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} trusted=true
 green_points = np.load("points.npz")["green"]
 cyan_points = np.load("points.npz")["cyan"]
 
-# %% editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} trusted=true
 # %time dists = pairwise_euclidian_distance(green_points, cyan_points)
 assert np.allclose(dists, np.load("points.npz")["dists_green_cyan"])
 
-# %% editable=true slideshow={"slide_type": ""} tags=["solution"]
+# %% editable=true slideshow={"slide_type": ""} tags=["solution"] trusted=true
 # You just calculated the distances between the green and the cyan color patches in the MBL logo ;)
 plt.figure(figsize=(4, 4))
 plt.scatter(green_points[:, 0], green_points[:, 1], c="yellowgreen", s=1)
@@ -558,7 +559,7 @@ plt.gca().set_aspect("equal")
 # - Once you've found the minimum in the matrix with the given code below (`row, col`), set
 
 
-# %%
+# %% trusted=true
 def nearest_neighbor(cost_matrix, threshold=np.finfo(float).max):
     """Greedy nearest neighbor assignment.
 
@@ -590,7 +591,7 @@ def nearest_neighbor(cost_matrix, threshold=np.finfo(float).max):
     return np.array(ids_from), np.array(ids_to)
 
 
-# %% editable=true slideshow={"slide_type": ""} tags=["solution"]
+# %% editable=true slideshow={"slide_type": ""} tags=["solution"] trusted=true
 # Solution exercise 1.4
 
 
@@ -623,7 +624,7 @@ def nearest_neighbor(cost_matrix, threshold=np.finfo(float).max):
 # %% [markdown]
 # Test your implementation
 
-# %%
+# %% trusted=true
 test_matrix = np.array(
     [
         [8, 2, 8],
@@ -654,7 +655,7 @@ print("Success :)")
 # - `_link_two_frames` takes the cost matrix for two frames and returns lists of links, appearing cells and disappearing cells.
 
 
-# %%
+# %% trusted=true
 class FrameByFrameLinker:
     """Base class for linking detections by considering pairs of adjacent frames."""
 
@@ -845,7 +846,7 @@ class FrameByFrameLinker:
             raise ValueError("Detection IDs are not contiguous.")
 
 
-# %%
+# %% trusted=true
 dummy_linker = FrameByFrameLinker()
 dummy_links = dummy_linker.link(detections)
 dummy_tracks = dummy_linker.relabel_detections(detections, dummy_links)
@@ -853,7 +854,7 @@ dummy_tracks = dummy_linker.relabel_detections(detections, dummy_links)
 # %% [markdown]
 # Visualize results.
 
-# %%
+# %% trusted=true
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
@@ -864,7 +865,7 @@ visualize_tracks(viewer, dummy_tracks, name="dummy")
 # %% [markdown]
 # The extracted tracks are completely off. Let's fix that :)
 
-# %%
+# %% trusted=true
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
@@ -883,7 +884,7 @@ if viewer:
 # </div>
 
 
-# %%
+# %% trusted=true
 class NearestNeighborLinkerEuclidian(FrameByFrameLinker):
     def __init__(self, threshold=sys.float_info.max, *args, **kwargs):
         """
@@ -967,7 +968,7 @@ class NearestNeighborLinkerEuclidian(FrameByFrameLinker):
         return links
 
 
-# %% editable=true slideshow={"slide_type": ""} tags=["solution"]
+# %% editable=true slideshow={"slide_type": ""} tags=["solution"] trusted=true
 # Solution Exercise 1.5
 class NearestNeighborLinkerEuclidian(FrameByFrameLinker):
     def __init__(self, threshold=sys.float_info.max, *args, **kwargs):
@@ -1032,7 +1033,7 @@ class NearestNeighborLinkerEuclidian(FrameByFrameLinker):
         return links
 
 
-# %%
+# %% trusted=true
 # nn_linker = NearestNeighborLinkerEuclidian(threshold=1000) # Explore different values of `threshold`
 nn_linker = NearestNeighborLinkerEuclidian(threshold=50)  # Solution param
 nn_links = nn_linker.link(detections)
@@ -1041,7 +1042,7 @@ nn_tracks = nn_linker.relabel_detections(detections, nn_links)
 # %% [markdown]
 # Visualize results
 
-# %%
+# %% trusted=true
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
@@ -1049,7 +1050,7 @@ viewer = napari.Viewer()
 viewer.add_image(x)
 visualize_tracks(viewer, nn_tracks, name="nn")
 
-# %%
+# %% trusted=true
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
@@ -1059,7 +1060,7 @@ if viewer:
 # ## Checkpoint 2
 # <div class="alert alert-block alert-success"><h3>Checkpoint 2: We built a basic tracking algorithm from scratch :).</h3></div>
 
-# %% [markdown] editable=true jp-MarkdownHeadingCollapsed=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""} tags=[]
 # ## Exercise 1.6
 # <div class="alert alert-block alert-info"><h3>Exercise 1.6: Estimate the global drift of the data</h3>
 #
@@ -1070,7 +1071,7 @@ if viewer:
 # </div>
 
 
-# %%
+# %% trusted=true
 class NearestNeighborLinkerDriftCorrection(NearestNeighborLinkerEuclidian):
     def __init__(self, drift, *args, **kwargs):
         """
@@ -1107,7 +1108,7 @@ class NearestNeighborLinkerDriftCorrection(NearestNeighborLinkerEuclidian):
         return dists
 
 
-# %%
+# %% trusted=true
 ######################
 ### YOUR CODE HERE ###
 ######################
@@ -1116,7 +1117,7 @@ drift_linker = NearestNeighborLinkerDriftCorrection(threshold=200, drift=(0, 0))
 drift_links = drift_linker.link(detections)
 drift_tracks = drift_linker.relabel_detections(detections, drift_links)
 
-# %% editable=true slideshow={"slide_type": ""} tags=["solution"]
+# %% editable=true slideshow={"slide_type": ""} tags=["solution"] trusted=true
 # Solution Exercise 1.6
 drift_linker = NearestNeighborLinkerDriftCorrection(
     threshold=50, drift=(-20, 0)
@@ -1127,7 +1128,7 @@ drift_tracks = drift_linker.relabel_detections(detections, drift_links)
 # %% [markdown]
 # Visualize results. You should mostly vertically moving tracks.
 
-# %%
+# %% trusted=true
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
@@ -1135,13 +1136,13 @@ viewer = napari.Viewer()
 viewer.add_image(x)
 visualize_tracks(viewer, drift_tracks, name="drift")
 
-# %%
+# %% trusted=true
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
 
 
-# %% [markdown] jp-MarkdownHeadingCollapsed=true
+# %% [markdown] editable=true jp-MarkdownHeadingCollapsed=true slideshow={"slide_type": ""} tags=[]
 # ## Optimal frame-by-frame matching (*Linear assignment problem* or *Weighted bipartite matching*)
 
 # %% [markdown]
@@ -1163,7 +1164,7 @@ if viewer:
 #
 # from [Jaqaman, Khuloud, et al. "Robust single-particle tracking in live-cell time-lapse sequences." Nature Methods (2008)](https://www.nature.com/articles/nmeth.1237)
 
-# %% [markdown] jp-MarkdownHeadingCollapsed=true
+# %% [markdown]
 # ## Exercise 1.7
 # <div class="alert alert-block alert-info"><h3>Exercise 1.7: Perform optimal frame-by-frame linking</h3>
 #
@@ -1172,7 +1173,7 @@ if viewer:
 # </div>
 
 
-# %%
+# %% trusted=true
 class BipartiteMatchingLinker(FrameByFrameLinker):
     def __init__(
         self,
@@ -1299,7 +1300,7 @@ class BipartiteMatchingLinker(FrameByFrameLinker):
         return links
 
 
-# %%
+# %% editable=true slideshow={"slide_type": ""} tags=["solution"] trusted=true
 # Solution exercise 1.7
 
 
@@ -1445,7 +1446,7 @@ class BipartiteMatchingLinker(FrameByFrameLinker):
         return links
 
 
-# %%
+# %% trusted=true
 bm_linker = BipartiteMatchingLinker(
     threshold=50, drift=(-20, 0), birth_cost_factor=1.05, death_cost_factor=1.05
 )
@@ -1455,7 +1456,7 @@ bm_tracks = bm_linker.relabel_detections(detections, bm_links)
 # %% [markdown]
 # Visualize results. You should observe mostly vertically moving tracks, without ever explicitely modelling the drift. This is quite cool :)
 
-# %%
+# %% trusted=true
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
@@ -1463,7 +1464,7 @@ viewer = napari.Viewer()
 viewer.add_image(x)
 visualize_tracks(viewer, bm_tracks, name="bm")
 
-# %%
+# %% trusted=true
 viewer = napari.viewer.current_viewer()
 if viewer:
     viewer.close()
@@ -1485,7 +1486,7 @@ if viewer:
 # </div>
 
 
-# %%
+# %% trusted=true
 class YourLinker(BipartiteMatchingLinker):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1507,9 +1508,9 @@ class YourLinker(BipartiteMatchingLinker):
         return np.zeros((detections0.max(), detections1.max()))
 
 
-# %%
+# %% trusted=true
 your_linker = YourLinker()
 your_links = your_linker.link(detections)
 your_tracks = your_linker.relabel_detections(detections, your_links)
 
-# %%
+# %% trusted=true
