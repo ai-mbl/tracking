@@ -29,7 +29,7 @@ You will learn
 - to use a robust pretrained deep-learning-based **object detection** algorithm called *StarDist* (Exercise 1.2).
 - to implement a basic **nearest-neighbor linking algorithm** (Exercises 1.3 - 1.6).
 - to compute optimal frame-by-frame linking by setting up a **bipartite matching problem** and using a python-based solver (Exercise 1.7).
-- to compute suitable object **features** for the object linking process with `scikit-image` (Exercise 1.8).
+- to compute suitable object **features** for the object linking process with `scikit-image` (Exercise 1.8, bonus).
 
 
 ### 2. Tracking with an integer linear program (ILP)
@@ -49,4 +49,4 @@ Here we will use an extended version of the tracking algorithm introduced in exe
 
 You will learn
 - how this formulation addresses **typical challenges of tracking in bioimages**, like cell division and objects temporarily going out of focus.
-- How to use **Trackmate**, a versatile ready-to-go implementation of two-step LAP tracking in `ImageJ/Fiji`.
+- how to use **Trackmate**, a versatile ready-to-go implementation of two-step LAP tracking in `ImageJ/Fiji`.
