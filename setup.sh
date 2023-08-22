@@ -12,7 +12,6 @@ mamba activate 08-tracking
 
 # Install dependencies
 mamba install -y -c conda-forge napari
-mamba install -y -c conda-forge jupyterlab
 
 ### Install tensorflow ###
 # from https://www.tensorflow.org/install/pip#linux
@@ -47,7 +46,6 @@ mamba activate 08-ilp-tracking
 
 # Install dependencies
 mamba install -y -c conda-forge napari
-mamba install -y -c conda-forge jupyterlab
 mamba install -y -c conda-forge -c gurobi -c funkelab ilpy
 pip install git+https://github.com/funkelab/motile
 pip install plotly
