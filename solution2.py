@@ -6,11 +6,11 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.14.5
+#       jupytext_version: 1.15.0
 #   kernelspec:
-#     display_name: Python 3 (ipykernel)
+#     display_name: Python [conda env:08-ilp-tracking]
 #     language: python
-#     name: python3
+#     name: conda-env-08-ilp-tracking-py
 # ---
 
 # %% [markdown]
@@ -57,6 +57,9 @@ import pandas as pd
 import numpy as np
 import napari
 import networkx as nx
+import plotly.io as pio
+
+pio.renderers.default = "iframe"
 
 import motile
 from motile.plot import draw_track_graph, draw_solution
