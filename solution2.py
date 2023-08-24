@@ -8,9 +8,9 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.15.0
 #   kernelspec:
-#     display_name: Python [conda env:08-ilp-tracking]
+#     display_name: Python 3 (ipykernel)
 #     language: python
-#     name: conda-env-08-ilp-tracking-py
+#     name: python3
 # ---
 
 # %% [markdown]
@@ -502,9 +502,10 @@ def solve_network_flow(graph, node_weight, edge_weight, max_flow):
 ### YOUR CODE HERE ###
 ######################
 
+# Reminder: The optimization problem *minimizes* the cost of the solution.
 node_weight = 1  # Adapt this weight
 edge_weight = 1  # Adapt this weight
-max_flow = 4
+max_flow = 4  # Adapt this
 
 """
 Explanation: ???
@@ -528,12 +529,20 @@ Futhermore, each detection (node) should maximally be linked to one other detect
 
 # %% [markdown]
 # Here we actually run the optimization, and compare the found solution to the ground truth.
+#
+# <div class="alert alert-block alert-warning"><h3>Gurobi license error</h3>
+# Please ignore the warning `Could not create Gurobi backend ...`.
+#
+#
+# Our integer linear program (ILP) tries to use the proprietary solver Gurobi. You probably don't have a license, in which case the ILP will fall back to the open source solver SCIP.
+# </div>
 
 # %%
 flow = solve_network_flow(candidate_graph, node_weight, edge_weight, max_flow)
 print_solution_stats(flow, candidate_graph, gt_graph)
 
 # %%
+fig_gt.show()
 fig_flow = draw_solution(
     candidate_graph,
     flow,
@@ -551,7 +560,6 @@ fig_flow = fig_flow.update_layout(
     }
 )
 fig_flow.show()
-fig_gt.show()
 
 
 # %% [markdown]
@@ -829,6 +837,7 @@ with_birth = solve_ilp_birth(candidate_graph)
 print_solution_stats(with_birth, candidate_graph, gt_graph)
 
 # %%
+fig_gt.show()
 fig_birth = draw_solution(
     candidate_graph,
     with_birth,
@@ -846,7 +855,6 @@ fig_birth = fig_birth.update_layout(
     }
 )
 fig_birth.show()
-fig_gt.show()
 
 # %%
 recolored_gt = recolor_segmentation(labels, gt_graph)
@@ -955,6 +963,7 @@ full_ilp = solve_full_ilp(candidate_graph)
 print_solution_stats(full_ilp, candidate_graph, gt_graph)
 
 # %%
+fig_gt.show()
 fig_ilp = draw_solution(
     candidate_graph,
     full_ilp,
@@ -972,7 +981,6 @@ fig_ilp = fig_ilp.update_layout(
     }
 )
 fig_ilp.show()
-fig_gt.show()
 
 # %%
 recolored_gt = recolor_segmentation(labels, gt_graph)
@@ -1008,5 +1016,3 @@ get_metrics(gt_nx_graph, labels, ilp_graph, ilp_det)
 # - Tune the detection algorithm to avoid false negatives.
 #
 # </div>
-
-# %%

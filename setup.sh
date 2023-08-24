@@ -1,5 +1,13 @@
 #!/usr/bin/env -S bash -i
 
+if [ "${BASH_SOURCE[0]}" -ef "$0" ]
+then
+    echo "Hey, you should source this script, not execute it!"
+    echo "Try: source setup.sh"
+    echo "Exiting..."
+    exit 1
+fi
+
 ##################
 ### Exercise 1 ###
 ##################
