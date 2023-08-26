@@ -71,7 +71,7 @@ matplotlib.rcParams["image.interpolation"] = "none"
 matplotlib.rcParams["figure.figsize"] = (14, 10)
 import numpy as np
 from tifffile import imread, imwrite
-from tqdm.auto import tqdm
+from tqdm import tqdm
 import skimage
 import pandas as pd
 import scipy
