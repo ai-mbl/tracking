@@ -1206,7 +1206,20 @@ class BipartiteMatchingLinker(FrameByFrameLinker):
         Returns:
             m x n cost matrix
         """
-        dists = np.zeros((detections0.max(), detections1.max()))
+        # regionprops regions are sorted by label
+        regions0 = skimage.measure.regionprops(detections0)
+        points0 = [np.array(r.centroid) for r in regions0]
+
+        regions1 = skimage.measure.regionprops(detections1)
+        points1 = [np.array(r.centroid) for r in regions1]
+
+        dists = []
+        for p0 in points0:
+            for p1 in points1:
+                dists.append(np.sqrt(((p0 + self.drift - p1) ** 2).sum()))
+
+        dists = np.array(dists).reshape(len(points0), len(points1))
+
         return dists
 
     def _link_two_frames(self, cost_matrix):
