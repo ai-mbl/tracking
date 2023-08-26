@@ -19,7 +19,7 @@ mamba create -y -n 08-tracking python=3.9
 mamba activate 08-tracking
 
 # Install dependencies
-mamba install -y -c conda-forge napari
+mamba install -y -c conda-forge napari pyqt
 
 ### Install tensorflow ###
 # from https://www.tensorflow.org/install/pip#linux
@@ -53,7 +53,7 @@ mamba create -y -n 08-ilp-tracking python=3.9
 mamba activate 08-ilp-tracking
 
 # Install dependencies
-mamba install -y -c conda-forge napari
+mamba install -y -c conda-forge napari pyqt
 mamba install -y -c conda-forge -c gurobi -c funkelab ilpy
 pip install git+https://github.com/funkelab/motile
 pip install traccuracy
