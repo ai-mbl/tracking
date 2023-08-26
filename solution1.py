@@ -1034,8 +1034,7 @@ class NearestNeighborLinkerEuclidian(FrameByFrameLinker):
 
 
 # %% trusted=true
-# nn_linker = NearestNeighborLinkerEuclidian(threshold=1000) # Explore different values of `threshold`
-nn_linker = NearestNeighborLinkerEuclidian(threshold=50)  # Solution param
+nn_linker = NearestNeighborLinkerEuclidian(threshold=50)
 nn_links = nn_linker.link(detections)
 nn_tracks = nn_linker.relabel_detections(detections, nn_links)
 
