@@ -59,6 +59,7 @@ pip install git+https://github.com/funkelab/motile
 pip install traccuracy
 pip install plotly
 pip install ipywidgets
+pip install nbformat
 
 # Make environment discoverable by Jupyter
 pip install ipykernel
