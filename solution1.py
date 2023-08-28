@@ -569,12 +569,11 @@ def nearest_neighbor(cost_matrix, threshold=np.finfo(float).max):
         cost_matrix: m x n matrix with pairwise linking costs of two sets of points.
         threshold (int): Maximal cost of links.
     Returns:
-        Determined matches as tuple of lists (ids_of_rows, ids_of_columns).
+        matches: List of tuples (from_id, to).
     """
 
     A = cost_matrix.copy().astype(float)
-    ids_from = []
-    ids_to = []
+    matches = []
 
     for i in range(min(A.shape[0], A.shape[1])):
         # get the indices of the current minimum in the matrix
@@ -588,7 +587,7 @@ def nearest_neighbor(cost_matrix, threshold=np.finfo(float).max):
         # 2) Store the link
         # 3) Set the entire row and column of the found link to `threshold`
 
-    return np.array(ids_from), np.array(ids_to)
+    return matches
 
 
 # %% editable=true slideshow={"slide_type": ""} tags=["solution"] trusted=true
@@ -604,7 +603,7 @@ def nearest_neighbor(cost_matrix, threshold=np.finfo(float).max):
         cost_matrix: m x n matrix with pairwise linking costs of two sets of points.
         threshold (int): Maximal cost of links.
     Returns:
-        matches: List o tuples (from_id, to).
+        matches: List of tuples (from_id, to).
     """
     A = cost_matrix.copy().astype(float)
     matches = []
@@ -642,7 +641,7 @@ assert (
 print("Success :)")
 
 
-# %% [markdown]
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Linking
 
 # %% [markdown]
@@ -1059,7 +1058,7 @@ if viewer:
 # ## Checkpoint 2
 # <div class="alert alert-block alert-success"><h3>Checkpoint 2: We built a basic tracking algorithm from scratch :).</h3></div>
 
-# %% [markdown] editable=true slideshow={"slide_type": ""} tags=[]
+# %% [markdown] editable=true slideshow={"slide_type": ""} tags=[] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 1.6
 # <div class="alert alert-block alert-info"><h3>Exercise 1.6: Estimate the global drift of the data</h3>
 #
@@ -1163,7 +1162,7 @@ if viewer:
 #
 # from [Jaqaman, Khuloud, et al. "Robust single-particle tracking in live-cell time-lapse sequences." Nature Methods (2008)](https://www.nature.com/articles/nmeth.1237)
 
-# %% [markdown]
+# %% [markdown] jp-MarkdownHeadingCollapsed=true
 # ## Exercise 1.7
 # <div class="alert alert-block alert-info"><h3>Exercise 1.7: Perform optimal frame-by-frame linking</h3>
 #
