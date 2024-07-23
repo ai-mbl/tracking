@@ -82,11 +82,12 @@ from tqdm.auto import tqdm
 # ## Load the dataset and inspect it in napari
 
 # %% [markdown]
-# For this exercise we will be working with a fluorescence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA). It is similar to the dataset at https://zenodo.org/record/4034976#.YwZRCJPP1qt. The raw data and pre-computed segmentations are saved in a zarr, and the ground truth tracks are saved in a csv.
+# For this exercise we will be working with a fluorescence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA). It is similar to the dataset at https://zenodo.org/record/4034976#.YwZRCJPP1qt. The raw data and pre-computed segmentations are saved in a zarr, and the ground truth tracks are saved in a csv. The segmentation was generated with a pre-trained StartDist model, so there may be some segmentation errors which can affect the tracking process.
 
 # %%
 data_root = zarr.open("data/breast_cancer_fluo.zarr", 'r')
 image_data = data_root["raw"][:]
+segmentation = data_root["seg"][:]
 
 
 # %%
@@ -126,6 +127,7 @@ if viewer:
     viewer.close()
 viewer = napari.Viewer()
 viewer.add_image(image_data, name="raw")
+viewer.add_labels(segmentation, name="seg")
 
 # %%
 data, properties, edges = to_napari_tracks_layer(gt_tracks, frame_key="time", location_key="pos")
