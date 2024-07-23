@@ -79,7 +79,9 @@ from tqdm.auto import tqdm
 # ## Load the dataset and inspect it in napari
 
 # %% [markdown]
-# For this exercise we will work with a small excerpt of the dataset from exercise 1. We already provide you with the detections this time, let's load them and take a look.
+# For this exercise we will be working with a fluorescence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA). It is similar to the dataset at https://zenodo.org/record/4034976#.YwZRCJPP1qt.
+#
+# For this exercise we will work with a small excerpt of the dataset. Let's load it below.
 
 # %%
 base_path = Path("data/exercise2")
@@ -96,6 +98,9 @@ det_center_probs = data["det_center_probs"][()]  # det_center_probs is a diction
 # %%
 links
 
+
+# %% [markdown]
+# Let's use [napari](https://napari.org/tutorials/fundamentals/getting_started.html) to visualize the data. Napari is a wonderful viewer for imaging data that you can interact with in python, even directly out of jupyter notebooks.If you've never used napari, you might want to take a few minutes to go through [this tutorial](https://napari.org/stable/tutorials/fundamentals/viewer.html).
 
 # %% [markdown]
 # <div class="alert alert-block alert-danger"><h3>Napari in a jupyter notebook:</h3>
@@ -159,6 +164,11 @@ viewer.add_image(img)
 visualize_tracks(viewer, labels, links.to_numpy(), "ground_truth")
 viewer.add_labels(det, name="detections")
 viewer.grid.enabled = True
+
+# %% [markdown]
+# Now it is easy to see that the ground truth nuclei have consistent IDs (visualized as random colors) over time.
+#
+# If you zoom in, you will note that the annotations are not perfect segmentations, but rather circles placed roughly in the center of each nucleus. However, our detections are full segmentations.
 
 # %%
 viewer = napari.viewer.current_viewer()
