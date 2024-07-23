@@ -1,12 +1,13 @@
 # ---
 # jupyter:
 #   jupytext:
+#     custom_cell_magics: kql
 #     formats: py:percent,ipynb
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.15.0
+#       jupytext_version: 1.11.2
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -38,6 +39,8 @@
 # ######################
 # ```
 #
+# TEST
+#
 # This notebook was originally written by Benjamin Gallusser.
 
 # %% [markdown]
@@ -59,7 +62,7 @@ import napari
 import networkx as nx
 import plotly.io as pio
 
-pio.renderers.default = "iframe"
+pio.renderers.default = "vscode"
 
 import motile
 from motile.plot import draw_track_graph, draw_solution
@@ -67,11 +70,10 @@ from utils import InOutSymmetry, MinTrackLength
 
 import traccuracy
 from traccuracy import run_metrics
-from traccuracy.matchers import CTCMatched
 from traccuracy.metrics import CTCMetrics, DivisionMetrics
+from traccuracy.matchers import CTCMatcher
 
-# Pretty tqdm progress bars
-# ! jupyter nbextension enable --py widgetsnbextension
+from tqdm.auto import tqdm
 
 # %% [markdown]
 # ## Load the dataset and inspect it in napari
@@ -715,22 +717,22 @@ def get_metrics(gt_graph, labels, pred_graph, pred_segmentation):
         frame_key="time",
         label_key="show",
         location_keys=("x", "y"),
+        segmentation=labels,
     )
-    gt_data = traccuracy.TrackingData(gt_graph, segmentation=labels)
 
     pred_graph = traccuracy.TrackingGraph(
         graph=pred_graph,
         frame_key="time",
         label_key="show",
         location_keys=("x", "y"),
+        segmentation=pred_segmentation,
     )
-    pred_data = traccuracy.TrackingData(pred_graph, segmentation=pred_segmentation)
 
     results = run_metrics(
-        gt_data=gt_data,
-        pred_data=pred_data,
-        matcher=CTCMatched,
-        metrics=[CTCMetrics, DivisionMetrics],
+        gt_data=gt_graph,
+        pred_data=pred_graph,
+        matcher=CTCMatcher(),
+        metrics=[CTCMetrics(), DivisionMetrics()],
     )
 
     return results
@@ -1016,3 +1018,6 @@ get_metrics(gt_nx_graph, labels, ilp_graph, ilp_det)
 # - Tune the detection algorithm to avoid false negatives.
 #
 # </div>
+
+# %% [markdown]
+#
