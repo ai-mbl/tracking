@@ -15,7 +15,7 @@
 # ---
 
 # %% [markdown]
-# # Exercise 2: Tracking-by-detection with an integer linear program (ILP)
+# # Exercise 9: Tracking-by-detection with an integer linear program (ILP)
 #
 # You could also run this notebook on your laptop, a GPU is not needed :).
 #
@@ -72,6 +72,7 @@ import traccuracy
 from traccuracy import run_metrics
 from traccuracy.metrics import CTCMetrics, DivisionMetrics
 from traccuracy.matchers import CTCMatcher
+import zarr
 
 from tqdm.auto import tqdm
 
@@ -79,12 +80,137 @@ from tqdm.auto import tqdm
 # ## Load the dataset and inspect it in napari
 
 # %% [markdown]
-# For this exercise we will be working with a fluorescence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA). It is similar to the dataset at https://zenodo.org/record/4034976#.YwZRCJPP1qt.
-#
-# For this exercise we will work with a small excerpt of the dataset. Let's load it below.
+# For this exercise we will be working with a fluorescence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA). It is similar to the dataset at https://zenodo.org/record/4034976#.YwZRCJPP1qt. The raw data is saved in a zarr, and the ground truth tracks are saved 
 
 # %%
-base_path = Path("data/exercise2")
+base_path = Path("data/exercise1")
+
+from tifffile import imread
+from utils import normalize
+
+def preprocess(X, Y, axis_norm=(0, 1)):
+    # normalize channels independently
+    X = np.stack(
+        [
+            normalize(x, 1, 99.8, axis=axis_norm)
+            for x in tqdm(X, leave=True, desc="Normalize images")
+        ]
+    )
+x = np.stack(
+    [imread(xi) for xi in sorted((base_path / "images").glob("*.tif"))]
+)  # images
+y = np.stack(
+    [imread(yi) for yi in sorted((base_path / "gt_tracking").glob("*.tif"))]
+)  # ground truth annotations
+assert x.shape == y.shape
+print(f"Number of images: {len(x)}")
+print(f"Shape of images: {x[0].shape}")
+
+
+
+
+# %%
+viewer = napari.viewer.current_viewer()
+if viewer:
+    viewer.close()
+viewer = napari.Viewer()
+viewer.add_image(x)
+viewer.add_labels(y)
+
+# %%
+
+
+data_root = zarr.open("data/breast_cancer_fluo.zarr", 'a')
+data_root["raw"] = x
+
+# %%
+links_path = base_path / "gt_tracking" / "man_track.txt"
+from csv import DictReader
+track_to_parent_dict = {}
+with open(links_path) as f:
+    reader = DictReader(f, fieldnames=["track_id", "from_time", "to_time", "parent_id"], delimiter=" ")
+    for row in reader:
+        print(row)
+        parent_time = int(row["from_time"]) - 1
+        if parent_time not in track_to_parent_dict:
+            track_to_parent_dict[parent_time] = {}
+        track_to_parent_dict[parent_time][int(row["track_id"])] = int(row["parent_id"])
+track_to_parent_dict
+
+# %%
+from skimage.measure import regionprops
+from csv import DictWriter
+
+def find_parent(nodes_by_time, time, label):
+    if time in track_to_parent_dict and label in track_to_parent_dict[time]:
+        parent_label = track_to_parent_dict[time][label]
+        print(time, label, parent_label)
+    else:
+        parent_label = label
+    if time in nodes_by_time:
+        for node in nodes_by_time[time]:
+            if node["label"] == parent_label:
+                return node["id"]
+    return -1
+    
+
+def write_gt_tracks_csv(labels, outfile):
+    with open(outfile, 'w') as f:
+        writer = DictWriter(f, fieldnames=["id", "time", "x", "y", "parent_id"], extrasaction='ignore')
+        writer.writeheader()
+
+        node_id = 0
+        nodes_by_time = {}
+        for _time in range(len(labels)):
+            nodes_by_time[_time] = []
+            for detection in regionprops(labels[_time]):
+                node_dict = {
+                    "id": node_id,
+                    "x": detection.centroid[0],
+                    "y": detection.centroid[1],
+                    "label": detection.label,
+                    "time": _time,
+                    "parent_id": find_parent(nodes_by_time, _time - 1, detection.label)
+                }
+                node_id += 1
+                nodes_by_time[_time].append(node_dict)
+                writer.writerow(node_dict)
+
+write_gt_tracks_csv(y, "data/breast_cancer_fluo_gt_tracks.csv")
+
+
+# %%
+def read_gt_tracks():
+    with open("data/breast_cancer_fluo_gt_tracks.csv") as f:
+        reader = DictReader(f)
+        gt_tracks = nx.DiGraph()
+        for row in reader:
+            _id = int(row["id"])
+            row["pos"] = [float(row["x"]), float(row["y"])]
+            parent_id = int(row["parent_id"])
+            del row["x"]
+            del row["y"]
+            del row["id"]
+            del row["parent_id"]
+            gt_tracks.add_node(_id, **row)
+            if parent_id != -1:
+                gt_tracks.add_edge(parent_id, _id)
+    return gt_tracks
+
+gt_tracks = read_gt_tracks()
+
+# %%
+from motile_toolbox.visualization import to_napari_tracks_layer
+from napari.layers import Tracks
+data, properties, edges = to_napari_tracks_layer(gt_tracks, frame_key="time", location_key="pos")
+tracks_layer = Tracks(data, graph=edges, properties=properties,  name="gt_tracks")
+viewer.add_layer(tracks_layer)
+
+# %%
+
+x, y = preprocess(x, y)
+
+# %%
 data = np.load(base_path / "detected_renumbered.npz", allow_pickle=True)
 img = data["img"]
 labels = data["labels"]
