@@ -61,6 +61,7 @@ import numpy as np
 import napari
 import networkx as nx
 import plotly.io as pio
+import scipy
 
 pio.renderers.default = "vscode"
 
@@ -75,19 +76,23 @@ from traccuracy.matchers import CTCMatcher
 import zarr
 from motile_toolbox.visualization import to_napari_tracks_layer
 from napari.layers import Tracks
+from csv import DictReader
 
 from tqdm.auto import tqdm
+
+from typing import Iterable, Any
 
 # %% [markdown]
 # ## Load the dataset and inspect it in napari
 
 # %% [markdown]
-# For this exercise we will be working with a fluorescence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA). It is similar to the dataset at https://zenodo.org/record/4034976#.YwZRCJPP1qt. The raw data and pre-computed segmentations are saved in a zarr, and the ground truth tracks are saved in a csv. The segmentation was generated with a pre-trained StartDist model, so there may be some segmentation errors which can affect the tracking process.
+# For this exercise we will be working with a fluorescence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA). It is similar to the dataset at https://zenodo.org/record/4034976#.YwZRCJPP1qt. The raw data, pre-computed segmentations, and detection probabilities are saved in a zarr, and the ground truth tracks are saved in a csv. The segmentation was generated with a pre-trained StartDist model, so there may be some segmentation errors which can affect the tracking process. The detection probabilities also come from StarDist, and are downsampled in x and y by 2 compared to the detections and raw data.
 
 # %%
 data_root = zarr.open("data/breast_cancer_fluo.zarr", 'r')
 image_data = data_root["raw"][:]
 segmentation = data_root["seg"][:]
+probabilities = data_root["probs"][:]
 
 
 # %%
@@ -103,6 +108,7 @@ def read_gt_tracks():
             del row["y"]
             del row["id"]
             del row["parent_id"]
+            row["time"] = int(row["time"])
             gt_tracks.add_node(_id, **row)
             if parent_id != -1:
                 gt_tracks.add_edge(parent_id, _id)
@@ -154,159 +160,99 @@ if viewer:
 
 
 # %%
-def build_gt_graph(labels, links=None):
-    """Build a ground truth graph from a list of labels and links.
+gt_trackgraph = motile.TrackGraph(gt_tracks, frame_attribute="time")
+
+def nodes_from_segmentation(
+    segmentation: np.ndarray, probabilities: np.ndarray
+) -> tuple[nx.DiGraph, dict[int, list[Any]]]:
+    """Extract candidate nodes from a segmentation. Also computes specified attributes.
+    Returns a networkx graph with only nodes, and also a dictionary from frames to
+    node_ids for efficient edge adding.
 
     Args:
-        labels: list of 2D arrays, each array is a label image
-        links: np.ndarray, each row is a link (parent, child, parent_frame, child_frame).
+        segmentation (np.ndarray): A numpy array with integer labels and dimensions
+            (t, y, x), where h is the number of hypotheses.
+        probabilities (np.ndarray): A numpy array with integer labels and dimensions
+            (t, y, x), where h is the number of hypotheses.
+
     Returns:
-        trackgraph: motile.TrackGraph containing the ground truth graph.
-        G: networkx.DiGraph containing the ground truth graph.
+        tuple[nx.DiGraph, dict[int, list[Any]]]: A candidate graph with only nodes,
+            and a mapping from time frames to node ids.
     """
-
-    print("Build ground truth graph")
-    G = nx.DiGraph()
-
-    luts = []
-    n_v = 0
-    for t, d in enumerate(labels):
-        lut = {}
-        regions = skimage.measure.regionprops(d)
-        positions = []
-        for i, r in enumerate(regions):
-            draw_pos = int(d.shape[0] - r.centroid[0])
-            if draw_pos in positions:
-                draw_pos += 3  # To avoid overlapping nodes
-            positions.append(draw_pos)
-            G.add_node(
-                n_v,
-                time=t,
-                show=r.label,
-                draw_position=draw_pos,
-                y=int(r.centroid[0]),
-                x=int(r.centroid[1]),
-            )
-            lut[r.label] = n_v
-            n_v += 1
-        luts.append(lut)
-
-    n_e = 0
-    for t, (d0, d1) in enumerate(zip(labels, labels[1:])):
-        r0 = skimage.measure.regionprops(d0)
-        c0 = [np.array(r.centroid) for r in r0]
-
-        r1 = skimage.measure.regionprops(d1)
-        c1 = [np.array(r.centroid) for r in r1]
-
-        for _r0, _c0 in zip(r0, c0):
-            for _r1, _c1 in zip(r1, c1):
-                dist = np.linalg.norm(_c0 - _c1)
-                if _r0.label == _r1.label:
-                    G.add_edge(
-                        luts[t][_r0.label],
-                        luts[t + 1][_r1.label],
-                        edge_id=n_e,
-                        is_intertrack_edge=0,
-                    )
-                    n_e += 1
-
-    if links is not None:
-        divisions = links[links[:, 3] != 0]
-        for d in divisions:
-            if d[1] > 0 and d[1] < labels.shape[0]:
-                try:
-                    G.add_edge(
-                        luts[d[1] - 1][d[3]],
-                        luts[d[1]][d[0]],
-                        edge_id=n_e,
-                        show="DIV",
-                        is_intertrack_edge=1,
-                    )
-                    n_e += 1
-                except KeyError:
-                    pass
-
-    trackgraph = motile.TrackGraph(G, frame_attribute="time")
-
-    return trackgraph, G
+    cand_graph = nx.DiGraph()
+    # also construct a dictionary from time frame to node_id for efficiency
+    node_frame_dict: dict[int, list[Any]] = {}
+    print("Extracting nodes from segmentation")
+    for t in tqdm(range(len(segmentation))):
+        segs = segmentation[t]
+        nodes_in_frame = []
+        props = skimage.measure.regionprops(segs)
+        for regionprop in props:
+            node_id = regionprop.label
+            attrs = {
+                "time": t,
+            }
+            attrs["label"] = regionprop.label
+            centroid = regionprop.centroid  #  y, x
+            attrs["pos"] = centroid
+            probability = probabilities[t, int(centroid[0] // 2), int(centroid[1] // 2)]
+            attrs["prob"] = probability
+            cand_graph.add_node(node_id, **attrs)
+            nodes_in_frame.append(node_id)
+        if nodes_in_frame:
+            if t not in node_frame_dict:
+                node_frame_dict[t] = []
+            node_frame_dict[t].extend(nodes_in_frame)
+    return cand_graph, node_frame_dict
 
 
-def build_graph(detections, max_distance, detection_probs=None, drift=(0, 0)):
-    """Build a candidate graph from a list of detections.
+def create_kdtree(cand_graph: nx.DiGraph, node_ids: Iterable[Any]) -> scipy.spatial.KDTree:
+    positions = [cand_graph.nodes[node]["pos"] for node in node_ids]
+    return scipy.spatial.KDTree(positions)
 
-     Args:
-        detections: list of 2D arrays, each array is a label image.
-            Labels are expected to be consecutive integers starting from 1, background is 0.
-        max distance: maximum distance between centroids of two detections to place a candidate edge.
-        detection_probs: list of arrays, corresponding to ordered ids in detections.
-        drift: (y, x) tuple for drift correction in euclidian distance feature.
-    Returns:
-        G: motile.TrackGraph containing the candidate graph.
+
+def add_cand_edges(
+    cand_graph: nx.DiGraph,
+    max_edge_distance: float,
+    node_frame_dict: dict[int, list[Any]] = None,
+) -> None:
+    """Add candidate edges to a candidate graph by connecting all nodes in adjacent
+    frames that are closer than max_edge_distance. Also adds attributes to the edges.
+
+    Args:
+        cand_graph (nx.DiGraph): Candidate graph with only nodes populated. Will
+            be modified in-place to add edges.
+        max_edge_distance (float): Maximum distance that objects can travel between
+            frames. All nodes within this distance in adjacent frames will by connected
+            with a candidate edge.
+        node_frame_dict (dict[int, list[Any]] | None, optional): A mapping from frames
+            to node ids. If not provided, it will be computed from cand_graph. Defaults
+            to None.
     """
+    print("Extracting candidate edges")
 
-    print("Build candidate graph")
-    G = nx.DiGraph()
+    frames = sorted(node_frame_dict.keys())
+    prev_node_ids = node_frame_dict[frames[0]]
+    prev_kdtree = create_kdtree(cand_graph, prev_node_ids)
+    for frame in tqdm(frames):
+        if frame + 1 not in node_frame_dict:
+            continue
+        next_node_ids = node_frame_dict[frame + 1]
+        next_kdtree = create_kdtree(cand_graph, next_node_ids)
 
-    for t, d in enumerate(detections):
-        regions = skimage.measure.regionprops(d)
-        positions = []
-        for i, r in enumerate(regions):
-            draw_pos = int(d.shape[0] - r.centroid[0])
-            if draw_pos in positions:
-                draw_pos += 3  # To avoid overlapping nodes
-            positions.append(draw_pos)
-            feature = (
-                np.round(detection_probs[r.label], decimals=2).item()
-                if detection_probs is not None
-                else 1
-            )
-            G.add_node(
-                r.label - 1,
-                time=t,
-                show=r.label,
-                feature=feature,
-                draw_position=draw_pos,
-                y=int(r.centroid[0]),
-                x=int(r.centroid[1]),
-            )
+        matched_indices = prev_kdtree.query_ball_tree(next_kdtree, max_edge_distance)
 
-    n_e = 0
-    for t, (d0, d1) in enumerate(zip(detections, detections[1:])):
-        r0 = skimage.measure.regionprops(d0)
-        c0 = [np.array(r.centroid) for r in r0]
+        for prev_node_id, next_node_indices in zip(prev_node_ids, matched_indices):
+            for next_node_index in next_node_indices:
+                next_node_id = next_node_ids[next_node_index]
+                cand_graph.add_edge(prev_node_id, next_node_id)
 
-        r1 = skimage.measure.regionprops(d1)
-        c1 = [np.array(r.centroid) for r in r1]
+        prev_node_ids = next_node_ids
+        prev_kdtree = next_kdtree
 
-        for _r0, _c0 in zip(r0, c0):
-            for _r1, _c1 in zip(r1, c1):
-                dist = np.linalg.norm(_c0 + np.array(drift) - _c1)
-                if dist < max_distance:
-                    G.add_edge(
-                        _r0.label - 1,
-                        _r1.label - 1,
-                        # 1 - normalized euclidian distance
-                        feature=1
-                        - np.round(
-                            np.linalg.norm(_c0 + np.array(drift) - _c1) / max_distance,
-                            decimals=3,
-                        ).item(),
-                        edge_id=n_e,
-                        show="?",
-                    )
-                    n_e += 1
-
-    G = motile.TrackGraph(G, frame_attribute="time")
-
-    return G
-
-
-# %%
-gt_graph, gt_nx_graph = build_gt_graph(labels, links.to_numpy())
-candidate_graph = build_graph(
-    det, max_distance=50, detection_probs=det_center_probs, drift=(-4, 0)
-)
+cand_graph, node_frame_dict = nodes_from_segmentation(segmentation, probabilities)
+add_cand_edges(cand_graph, max_edge_distance=50, node_frame_dict=node_frame_dict)
+cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="time")
 
 # %% [markdown]
 # Let's visualize the two graphs.
@@ -315,15 +261,15 @@ candidate_graph = build_graph(
 
 # %%
 gt_edge_colors = [
-    (255, 140, 0) if "show" in edge else (0, 128, 0) for edge in gt_graph.edges.values()
+    (255, 140, 0) if "show" in edge else (0, 128, 0) for edge in gt_trackgraph.edges.values()
 ]
 
 fig_gt = draw_track_graph(
-    gt_graph,
-    position_attribute="draw_position",
+    gt_trackgraph,
+    position_attribute="pos",
     width=1000,
     height=500,
-    label_attribute="show",
+    # label_attribute="show",
     node_color=(0, 128, 0),
     edge_color=gt_edge_colors,
     node_size=25,
