@@ -89,10 +89,22 @@ from typing import Iterable, Any
 # For this exercise we will be working with a fluorescence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA). It is similar to the dataset at https://zenodo.org/record/4034976#.YwZRCJPP1qt. The raw data, pre-computed segmentations, and detection probabilities are saved in a zarr, and the ground truth tracks are saved in a csv. The segmentation was generated with a pre-trained StartDist model, so there may be some segmentation errors which can affect the tracking process. The detection probabilities also come from StarDist, and are downsampled in x and y by 2 compared to the detections and raw data.
 
 # %%
-data_root = zarr.open("data/breast_cancer_fluo.zarr", 'r')
+data_path = "data/breast_cancer_fluo.zarr"
+data_root = zarr.open(data_path, 'r')
 image_data = data_root["raw"][:]
-segmentation = data_root["seg"][:]
+segmentation = data_root["seg_relabeled"][:]
 probabilities = data_root["probs"][:]
+
+# %%
+print(segmentation)
+
+# %%
+# %load_ext autoreload
+# %autoreload 2
+
+from motile_toolbox.utils.relabel_segmentation import ensure_unique_seg_ids
+
+ensure_unique_seg_ids(data_path, "seg", data_path, "seg_relabeled")
 
 
 # %%
@@ -187,6 +199,7 @@ def nodes_from_segmentation(
         segs = segmentation[t]
         nodes_in_frame = []
         props = skimage.measure.regionprops(segs)
+        print(len(props))
         for regionprop in props:
             node_id = regionprop.label
             attrs = {
@@ -197,12 +210,12 @@ def nodes_from_segmentation(
             attrs["pos"] = centroid
             probability = probabilities[t, int(centroid[0] // 2), int(centroid[1] // 2)]
             attrs["prob"] = probability
+            assert node_id not in cand_graph.nodes
             cand_graph.add_node(node_id, **attrs)
             nodes_in_frame.append(node_id)
-        if nodes_in_frame:
-            if t not in node_frame_dict:
-                node_frame_dict[t] = []
-            node_frame_dict[t].extend(nodes_in_frame)
+        if t not in node_frame_dict:
+            node_frame_dict[t] = []
+        node_frame_dict[t].extend(nodes_in_frame)
     return cand_graph, node_frame_dict
 
 
@@ -251,72 +264,15 @@ def add_cand_edges(
         prev_kdtree = next_kdtree
 
 cand_graph, node_frame_dict = nodes_from_segmentation(segmentation, probabilities)
+print(cand_graph.number_of_nodes())
 add_cand_edges(cand_graph, max_edge_distance=50, node_frame_dict=node_frame_dict)
 cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="time")
 
 # %% [markdown]
-# Let's visualize the two graphs.
-#
-# In the ground truth graph nodes that belong to the same linear tracklet are marked with the same id. The two divisions in the dataset are marked in yellow.
-
-# %%
-gt_edge_colors = [
-    (255, 140, 0) if "show" in edge else (0, 128, 0) for edge in gt_trackgraph.edges.values()
-]
-
-fig_gt = draw_track_graph(
-    gt_trackgraph,
-    position_attribute="pos",
-    width=1000,
-    height=500,
-    # label_attribute="show",
-    node_color=(0, 128, 0),
-    edge_color=gt_edge_colors,
-    node_size=25,
-)
-fig_gt = fig_gt.update_layout(
-    title={
-        "text": "Ground truth",
-        "y": 0.98,
-        "x": 0.5,
-    }
-)
-fig_gt.show()
-
-# %% [markdown]
-# You can hover over the nodes and edges of the candidate graph to inspect their features.
-#
-# In contrast to the ground truth graph above, in the candidate graph, nodes have unique IDs.
-#
-# The nodes' `feature` is set to their detection probability, and the edges' `feature` to 1 - normalized_detection_distance, which is also visualized as their color saturation.
-
-# %%
-fig_candidate = draw_track_graph(
-    candidate_graph,
-    position_attribute="draw_position",
-    width=1000,
-    height=500,
-    label_attribute="show",
-    alpha_attribute="feature",
-    node_size=25,
-)
-fig_candidate = fig_candidate.update_layout(
-    title={
-        "text": "Candidate graph",
-        "y": 0.98,
-        "x": 0.5,
-    }
-)
-fig_candidate.show()
-
-
-# %% [markdown]
-# ## Network flow
+# ## Setting Up the Tracking Optimization Problem
 
 # %% [markdown]
 # As hinted earlier, our goal is to prune the candidate graph. More formally we want to find a graph $\tilde{G}=(\tilde{V}, \tilde{E})$ whose vertices $\tilde{V}$ are a subset of the candidate graph vertices $V$ and whose edges $\tilde{E}$ are a subset of the candidate graph edges $E$.
-#
-# The first algorithm we will use to do this is a [network flow](https://en.wikipedia.org/wiki/Network_flow_problem). It tries to find as many disjunct paths from the first frame to the last frame as possible. All other vertices and edges are discarded. This specific algorithm is called maximum flow.
 #
 #
 # Finding a good subgraph $\tilde{G}=(\tilde{V}, \tilde{E})$ can be formulated as an [integer linear program (ILP)](https://en.wikipedia.org/wiki/Integer_programming) (also, refer to the tracking lecture slides), where we assign a binary variable $x$ and a cost $c$ to each vertex and edge in $G$, and then computing $min_x c^Tx$.
@@ -326,23 +282,17 @@ fig_candidate.show()
 # Here we want to express the network flow as an ILP using `motile` ([docs here](https://funkelab.github.io/motile/)), a convenient wrapper around linking with an ILP.
 
 # %% [markdown]
-# ## Exercise 2.1 - Network flow
-# <div class="alert alert-block alert-info"><h3>Exercise 2.1: The network flow formulation below needs properly set parameters.</h3>
+# ## Exercise 2.1 - Basic Tracking with Motile
+# <div class="alert alert-block alert-info"><h3>Exercise 2.1: Set up a basic motile tracking pipeline</h3>
 # </div>
 #
-# Try different values for `node_weight`, `edge_weight` and `max_flow` and try to get an output similar to the plot right below.
-#
-# Give a short explanation why your parameters work.
-
-# %% [markdown]
-# <img src="figures/network_flow.png" width="700"/>
-
 
 # %% [markdown]
 # Here is a utility function to gauge some statistics of a solution.
 
 
 # %%
+from motile_toolbox.candidate_graph import graph_to_nx
 def print_solution_stats(solver, graph, gt_graph):
     """Prints the number of nodes and edges for candidate, ground truth graph, and solution graph.
 
@@ -358,18 +308,9 @@ def print_solution_stats(solver, graph, gt_graph):
     print(
         f"Ground truth graph\t{len(gt_graph.nodes):3} nodes\t{len(gt_graph.edges):3} edges"
     )
+    solution = graph_to_nx(solver.get_selected_subgraph())
 
-    node_selected = solver.get_variables(motile.variables.NodeSelected)
-    edge_selected = solver.get_variables(motile.variables.EdgeSelected)
-    nodes = 0
-    for node in candidate_graph.nodes:
-        if solver.solution[node_selected[node]] > 0.5:
-            nodes += 1
-    edges = 0
-    for u, v in candidate_graph.edges:
-        if solver.solution[edge_selected[(u, v)]] > 0.5:
-            edges += 1
-    print(f"Solution graph\t\t{nodes:3} nodes\t{edges:3} edges")
+    print(f"Solution graph\t\t{solution.number_of_nodes()} nodes\t{solution.number_of_edges()} edges")
 
 
 # %% [markdown]
@@ -381,7 +322,7 @@ def print_solution_stats(solver, graph, gt_graph):
 
 
 # %%
-def solve_network_flow(graph, node_weight, edge_weight, max_flow):
+def solve_basic_optimization(graph, edge_weight, edge_constant):
     """Set up and solve the network flow problem.
 
     Args:
@@ -395,24 +336,12 @@ def solve_network_flow(graph, node_weight, edge_weight, max_flow):
     """
     solver = motile.Solver(graph)
 
-    # Add costs
     solver.add_costs(
-        motile.costs.NodeSelection(
-            weight=node_weight, attribute="feature"
-        )  # Adapt this weight
-    )
-    solver.add_costs(
-        motile.costs.EdgeSelection(
-            weight=edge_weight, attribute="feature"
-        )  # Adapt this weight
+        motile.costs.EdgeDistance(weight=edge_weight, constant=edge_constant, position_attribute="pos")  # Adapt this weight
     )
 
-    solver.add_constraints(motile.constraints.MaxParents(max_flow))
-    solver.add_constraints(motile.constraints.MaxChildren(max_flow))
-
-    # Special contraints for network flow
-    solver.add_constraints(InOutSymmetry())
-    solver.add_constraints(MinTrackLength(1))
+    solver.add_constraints(motile.constraints.MaxParents(1))
+    solver.add_constraints(motile.constraints.MaxChildren(2))
 
     solution = solver.solve()
 
@@ -436,9 +365,11 @@ Explanation: ???
 # %% tags=["solution"]
 # Solution
 
-node_weight = -1
-edge_weight = -1
-max_flow = 1
+edge_weight = 1
+edge_constant=-20
+solver = solve_basic_optimization(cand_trackgraph, edge_weight, edge_constant)
+solution = graph_to_nx(solver.get_selected_subgraph())
+print_solution_stats(solver, cand_trackgraph, gt_trackgraph)
 
 """
 Explanation: Since the ILP formulation is a minimization problem, the total weight of each node and edge needs to be negative.
@@ -449,6 +380,21 @@ Futhermore, each detection (node) should maximally be linked to one other detect
 """
 
 
+# %%
+print(solution)
+
+# %%
+# viewer = napari.viewer.current_viewer()
+# if viewer:
+#     viewer.close()
+# viewer = napari.Viewer()
+# viewer.add_image(image_data, name="raw")
+# viewer.add_labels(segmentation, name="seg")
+
+data, properties, edges = to_napari_tracks_layer(solution, frame_key="time", location_key="pos")
+tracks_layer = Tracks(data, graph=edges, properties=properties,  name="solution_tracks")
+viewer.add_layer(tracks_layer)
+
 # %% [markdown]
 # Here we actually run the optimization, and compare the found solution to the ground truth.
 #
@@ -458,31 +404,6 @@ Futhermore, each detection (node) should maximally be linked to one other detect
 #
 # Our integer linear program (ILP) tries to use the proprietary solver Gurobi. You probably don't have a license, in which case the ILP will fall back to the open source solver SCIP.
 # </div>
-
-# %%
-flow = solve_network_flow(candidate_graph, node_weight, edge_weight, max_flow)
-print_solution_stats(flow, candidate_graph, gt_graph)
-
-# %%
-fig_gt.show()
-fig_flow = draw_solution(
-    candidate_graph,
-    flow,
-    position_attribute="draw_position",
-    width=1000,
-    height=500,
-    label_attribute="show",
-    node_size=25,
-)
-fig_flow = fig_flow.update_layout(
-    title={
-        "text": f"Network flow (no divisions) - cost: {flow.solution.get_value()}",
-        "y": 0.98,
-        "x": 0.5,
-    }
-)
-fig_flow.show()
-
 
 # %% [markdown]
 # ### Recolor detections in napari according to solution and compare to ground truth
