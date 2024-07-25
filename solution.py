@@ -340,7 +340,7 @@ def solve_basic_optimization(graph, edge_weight, edge_constant):
     solver = motile.Solver(graph)
 
     solver.add_costs(
-        motile.costs.EdgeDistance(weight=edge_weight, constant=edge_constant, position_attribute="pos")  # Adapt this weight
+        motile.costs.EdgeDistance(weight=edge_weight, constant=edge_constant, position_attribute="pos")
     )
 
     solver.add_constraints(motile.constraints.MaxParents(1))
@@ -408,7 +408,7 @@ Futhermore, each detection (node) should maximally be linked to one other detect
 # ## Visualize the Result
 
 # %%
-tracks_layer = to_napari_tracks_layer(solution, frame_key="time", location_key="pos", name="solution_tracks")
+tracks_layer = to_napari_tracks_layer(solution_graph, frame_key="time", location_key="pos", name="solution_tracks")
 viewer.add_layer(tracks_layer)
 
 # %% [markdown]
@@ -517,16 +517,81 @@ def get_metrics(gt_graph, labels, pred_graph, pred_segmentation):
 # %%
 get_metrics(gt_nx_graph, None, solution_graph, solution_seg)
 
+
 # %% [markdown]
-# ## Task 4 - Tune your motile tracking pipeline
-# <div class="alert alert-block alert-info"><h3>Task 4: Tune your motile tracking pipeline</h3>
-# <p>Now that you have ways to determine how good the output is, try adjusting your weights or using different combinations of Costs and Constraints to get better results. For now, stick to those implemented in `motile`, but consider what kinds of custom costs and constraints you could implement to improve performance, since that is what we will do next!</p>
+# ## Task 4 - Add an appear cost, but not at the boundary
+# The [Appear](https://funkelab.github.io/motile/api.html#motile.costs.Appear_) cost penalizes starting a new track, encouraging continuous tracks. However, you do not want to penalize tracks that appear in the first frame. In our case, we probably also do not want to penalize appearing at the "bottom" of the dataset. The built in Appear cost has an `ignore_attribute` argument, where if the node has that attribute and it evaluates to True, the Appear cost will not be paid for that node.
+#
+# <div class="alert alert-block alert-info"><h3>Task 4: Add an appear cost, but not at the boundary</h3>
+# <p> Add an attribute to the nodes of our candidate graph that is True if the appear cost should NOT be paid for that node, and False (or not present) otherwise. Then add an Appear cost to our motile pipeline using our new attribute as the `ignore_attribute` argument, and re-solve to see if performance improves.</p>
 # </div>
+
+# %%
+def add_appear_ignore_attr(cand_graph):
+    ### YOUR CODE HERE ###
+    pass  # delete this
+
+add_appear_ignore_attr(cand_graph)
+
+
+# %% tags=["solution"]
+def add_appear_ignore_attr(cand_graph):
+    for node in cand_graph.nodes():
+        time = cand_graph.nodes[node]["time"]
+        pos_x = cand_graph.nodes[node]["pos"][0]
+        if time == 0 or pos_x >= 710:
+            cand_graph.nodes[node]["ignore_appear"] = True
+
+add_appear_ignore_attr(cand_graph)
+cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="time")
+
+
+# %%
+def solve_appear_optimization(graph, edge_weight, edge_constant):
+    """Set up and solve the network flow problem.
+
+    Args:
+        graph (motile.TrackGraph): The candidate graph.
+        edge_weight (float): The weighting factor of the edge selection cost.
+        edge_constant(float): The constant cost of selecting any edge.
+
+    Returns:
+        motile.Solver: The solver object, ready to be inspected.
+    """
+    solver = motile.Solver(graph)
+
+    solver.add_costs(
+        motile.costs.EdgeDistance(weight=edge_weight, constant=edge_constant, position_attribute="pos")
+    )
+    solver.add_costs(
+        motile.costs.Appear(constant=50, ignore_attribute="ignore_appear") 
+    )
+
+    solver.add_constraints(motile.constraints.MaxParents(1))
+    solver.add_constraints(motile.constraints.MaxChildren(2))
+
+    solution = solver.solve()
+
+    return solver
+
+solver = solve_appear_optimization(cand_trackgraph, 1, -20)
+solution_graph = graph_to_nx(solver.get_selected_subgraph())
+
+# %%
+tracks_layer = to_napari_tracks_layer(solution_graph, frame_key="time", location_key="pos", name="solution_appear_tracks")
+viewer.add_layer(tracks_layer)
+solution_seg = relabel_segmentation(solution_graph, segmentation)
+viewer.add_labels(solution_seg, name="solution_appear_seg")
+
+# %%
+get_metrics(gt_tracks, None, solution_graph, solution_seg)
 
 # %% [markdown]
 # ## Checkpoint 2
 # <div class="alert alert-block alert-success"><h3>Checkpoint 2</h3>
-# We have run an ILP to get tracks, visualized the output, evaluated the results, and tuned the pipeline to try and improve performance. When most people have reached this checkpoint, we will go around and
+# We have run an ILP to get tracks, visualized the output, evaluated the results, and added an Appear cost that does not take effect at the boundary. If you reach this Checkpoint early, try adjusting your weights or using different combinations of Costs and Constraints to get better results. For now, stick to those implemented in motile, but consider what kinds of custom costs and constraints you could implement to improve performance, since that is what we will do next!
+#
+# When most people have reached this checkpoint, we will go around and
 # share what worked and what didn't, and discuss ideas for custom costs or constraints.
 # </div>
 
@@ -548,16 +613,11 @@ get_metrics(gt_nx_graph, None, solution_graph, solution_seg)
 # </div>
 
 # %%
-######################
-### YOUR CODE HERE ###
-######################
-drift = # fill in this
+drift = ... ### YOUR CODE HERE ###
 
 def add_drift_dist_attr(cand_graph, drift):
     for edge in cand_graph.edges():
-        ######################
         ### YOUR CODE HERE ###
-        ######################
         # get the location of the endpoints of the edge
         # then compute the distance between the expected movement and the actual movement
         # and save it in the "drift_dist" attribute (below)
@@ -598,6 +658,9 @@ def solve_drift_optimization(graph, edge_weight, edge_constant):
 
     solver.add_costs(
         motile.costs.EdgeSelection(weight=edge_weight, constant=edge_constant, attribute="drift_dist")
+    )
+    solver.add_costs(
+        motile.costs.Appear(constant=50, ignore_attribute="ignore_appear") 
     )
 
     solver.add_constraints(motile.constraints.MaxParents(1))
