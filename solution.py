@@ -19,27 +19,23 @@
 #
 # You could also run this notebook on your laptop, a GPU is not needed :).
 #
-# <center><img src="figures/ilp_nodiv.png" width="900"/></center>
-#
 # <div class="alert alert-danger">
-# Set your python kernel to <code>08-ilp-tracking</code>
+# Set your python kernel to <code>09-tracking</code>
 # </div>
 #
-# You will learn
-# - how linking with global context can be modeled and solved efficiently as a **network flow** using `motile` ([docs here](https://funkelab.github.io/motile/)) for a small-scale problem (Exercise 2.1).
-# - to adapt the previous formulation to allow for **arbitrary track starting and ending points** (Exercise 2.2).
-# - to extend the ILP to properly model **cell divisions** (Exercise 2.3).
-# - to tune the **hyperparameters** of the ILP (Exercise 2.4, bonus).
+# You will learn:
+# - how to represent tracking inputs and outputs as a graph using the `networkx` library
+# - how to use [`motile`](https://funkelab.github.io/motile/) to solve tracking via global optimization
+# - how to visualize tracking inputs and outputs
+# - how to evaluate tracking and understand common tracking metrics
+# - how to add custom costs to the candidate graph and incorpate them into `motile`
+# - how to learn the best **hyperparameters** of the ILP using an SSVM (bonus)
 #
 #
 # Places where you are expected to write code are marked with
 # ```
-# ######################
 # ### YOUR CODE HERE ###
-# ######################
 # ```
-#
-# TEST
 #
 # This notebook was originally written by Benjamin Gallusser.
 
@@ -101,6 +97,15 @@ probabilities = data_root["probs"][:]
 
 
 # %%
+def read_gt_tracks():
+    gt_tracks = nx.DiGraph()
+    ### YOUR CODE HERE ###
+    return gt_tracks
+
+gt_tracks = read_gt_tracks()
+
+
+# %% tags=["solution"]
 def read_gt_tracks():
     with open("data/breast_cancer_fluo_gt_tracks.csv") as f:
         reader = DictReader(f)
@@ -300,10 +305,7 @@ def solve_basic_optimization(graph, edge_weight, edge_constant):
         motile.Solver: The solver object, ready to be inspected.
     """
     solver = motile.Solver(graph)
-
-    ######################
     ### YOUR CODE HERE ###
-    ######################
     solution = solver.solve()
 
     return solver
@@ -600,6 +602,9 @@ viewer.add_layer(tracks_layer)
 
 solution_seg = relabel_segmentation(solution_graph, segmentation)
 viewer.add_labels(solution_seg, name="solution_seg_with_drift")
+
+# %%
+get_metrics(gt_nx_graph, None, solution_graph, solution_seg)
 
 # %% [markdown]
 # ## Bonus: Learning the Weights
