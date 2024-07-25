@@ -27,13 +27,13 @@ and updated for 2024 by Caroline Malin-Mayor.
 
 Here we will introduce a modern formulation of tracking-by-detection.
 
-You will learn
-- to **store and visualize** tracking results with `napari`.
-- how linking with global context can be modeled and solved efficiently as a **network flow** using `motile` ([docs here](https://funkelab.github.io/motile/)) for a small-scale problem.
-- to adapt the previous formulation to allow for **arbitrary track starting and ending points**.
-- to extend the ILP to properly model **cell divisions**.
-- to tune the **hyperparameters** of the ILP.
-
+You will learn:
+- how to represent tracking inputs and outputs as a graph using the `networkx` library
+- how to use [`motile`](https://funkelab.github.io/motile/) to solve tracking via global optimization
+- how to visualize tracking inputs and outputs
+- how to evaluate tracking and understand common tracking metrics
+- how to add custom costs to the candidate graph and incorpate them into `motile`
+- how to learn the best **hyperparameters** of the ILP using an SSVM (bonus)
 
 ### Bonus: Tracking with two-step Linear Assignment Problem (LAP)
 

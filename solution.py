@@ -37,7 +37,7 @@
 # ### YOUR CODE HERE ###
 # ```
 #
-# This notebook was originally written by Benjamin Gallusser.
+# This notebook was originally written by Benjamin Gallusser, and was edited for 2024 by Caroline Malin-Mayor.
 
 # %% [markdown]
 # ## Import packages
@@ -96,6 +96,22 @@ segmentation = data_root["seg_relabeled"][:]
 probabilities = data_root["probs"][:]
 
 
+# %% [markdown]
+# ## Task 1: Read in the ground truth graph
+# The ground truth tracks are stored in a CSV with five columns: id, time, x, y, and parent_id.
+#
+# Each row in the CSV represents a detection at location (time, x, y) with the given id.
+# If the parent_id is not -1, it represents the id of the parent in the previous time frame.
+# For cell tracking, tracks can usually be stored in this format, because there is no merging.
+# With merging, a more complicated data struture would be needed.
+#
+# <div class="alert alert-block alert-info"><h3>Task 1: Read in the ground truth graph</h3>
+#
+# For this task, you will read in the csv and store the tracks as a `networkx` DiGraph.
+# Each node in the graph will represent a detection, and should use the given id, and have attributes `time` and `pos` to represent time and position (a list of [x, y]).
+# Each edge in the graph will go from a parent to a child.
+# </div>
+
 # %%
 def read_gt_tracks():
     gt_tracks = nx.DiGraph()
@@ -112,14 +128,12 @@ def read_gt_tracks():
         gt_tracks = nx.DiGraph()
         for row in reader:
             _id = int(row["id"])
-            row["pos"] = [float(row["x"]), float(row["y"])]
+            attrs = {
+                "pos": [float(row["x"]), float(row["y"])],
+                "time": int(row["time"]),
+            }
             parent_id = int(row["parent_id"])
-            del row["x"]
-            del row["y"]
-            del row["id"]
-            del row["parent_id"]
-            row["time"] = int(row["time"])
-            gt_tracks.add_node(_id, **row)
+            gt_tracks.add_node(_id, **attrs)
             if parent_id != -1:
                 gt_tracks.add_edge(parent_id, _id)
     return gt_tracks
@@ -155,9 +169,9 @@ if viewer:
 
 
 # %% [markdown]
-# ## Task 1: Build a candidate graph from the detections
+# ## Task 2: Build a candidate graph from the detections
 #
-# <div class="alert alert-block alert-info"><h3>Task 1: Build a candidate graph</h3>
+# <div class="alert alert-block alert-info"><h3>Task 2: Build a candidate graph</h3>
 # </div>
 
 # %% [markdown]
@@ -286,8 +300,8 @@ cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="time")
 # `motile` ([docs here](https://funkelab.github.io/motile/)), makes it easy to link with an ILP in python by implementing commong linking constraints and costs. 
 
 # %% [markdown]
-# ## Task 2 - Basic Tracking with Motile
-# <div class="alert alert-block alert-info"><h3>Task 2: Set up a basic motile tracking pipeline</h3>
+# ## Task 3 - Basic Tracking with Motile
+# <div class="alert alert-block alert-info"><h3>Task 3: Set up a basic motile tracking pipeline</h3>
 # <p>Use the motile <a href=https://funkelab.github.io/motile/quickstart.html#sec-quickstart>quickstart</a> example to set up a basic motile pipeline for our task. Then run the function and find hyperparmeters that give you tracks.</p>
 # </div>
 #
@@ -504,8 +518,8 @@ def get_metrics(gt_graph, labels, pred_graph, pred_segmentation):
 get_metrics(gt_nx_graph, None, solution_graph, solution_seg)
 
 # %% [markdown]
-# ## Task 3 - Tune your motile tracking pipeline
-# <div class="alert alert-block alert-info"><h3>Task 3: Tune your motile tracking pipeline</h3>
+# ## Task 4 - Tune your motile tracking pipeline
+# <div class="alert alert-block alert-info"><h3>Task 4: Tune your motile tracking pipeline</h3>
 # <p>Now that you have ways to determine how good the output is, try adjusting your weights or using different combinations of Costs and Constraints to get better results. For now, stick to those implemented in `motile`, but consider what kinds of custom costs and constraints you could implement to improve performance, since that is what we will do next!</p>
 # </div>
 
@@ -525,11 +539,11 @@ get_metrics(gt_nx_graph, None, solution_graph, solution_seg)
 # 3. Add a new type of cost or constraint
 
 # %% [markdown]
-# # Task 4 - Incorporating Known Direction of Motion
+# # Task 5 - Incorporating Known Direction of Motion
 #
 # Motile has built in the EdgeDistance as an edge selection cost, which penalizes longer edges by computing the Euclidean distance between the endpoints. However, in our dataset we see a trend of upward motion in the cells, and the false detections at the top are not moving. If we penalize movement based on what we expect, rather than Euclidean distance, we can select more correct cells and penalize the non-moving artefacts at the same time.
 #  
-# <div class="alert alert-block alert-info"><h3>Task 4: Incorporating known direction of motion</h3>
+# <div class="alert alert-block alert-info"><h3>Task 5: Incorporating known direction of motion</h3>
 # <p> For this task, we need to determine the "expected" amount of motion, then add an attribute to our candidate edges that represents distance from the expected motion direction. Finally, we can incorporate that feature into the ILP via the EdgeSelection cost and see if it improves performance.</p>
 # </div>
 
