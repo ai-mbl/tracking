@@ -163,9 +163,9 @@ tracks_layer = to_napari_tracks_layer(gt_tracks, frame_key="time", location_key=
 viewer.add_layer(tracks_layer)
 
 # %%
-viewer = napari.viewer.current_viewer()
-if viewer:
-    viewer.close()
+# viewer = napari.viewer.current_viewer()
+# if viewer:
+#     viewer.close()
 
 
 # %% [markdown]
@@ -459,10 +459,19 @@ solution_seg = relabel_segmentation(solution_graph, segmentation)
 viewer.add_labels(solution_seg, name="solution_seg")
 
 # %%
-viewer = napari.viewer.current_viewer()
-if viewer:
-    viewer.close()
+# viewer = napari.viewer.current_viewer()
+# if viewer:
+#     viewer.close()
 
+
+# %% [markdown]
+# ## Checkpoint 2
+# <div class="alert alert-block alert-success"><h3>Checkpoint 2</h3>
+# We have set up and run a basic ILP to get tracks and visualized the output.  
+# Based on the visualization, how good is this ILP? What types of errors does it make? Why do you think it performs well or poorly?
+#
+# We will discuss this together soon, so think about possible improvements if you have extra time.
+# </div>
 
 # %% [markdown]
 # ## Evaluation Metrics
@@ -587,8 +596,8 @@ viewer.add_labels(solution_seg, name="solution_appear_seg")
 get_metrics(gt_tracks, None, solution_graph, solution_seg)
 
 # %% [markdown]
-# ## Checkpoint 2
-# <div class="alert alert-block alert-success"><h3>Checkpoint 2</h3>
+# ## Checkpoint 3
+# <div class="alert alert-block alert-success"><h3>Checkpoint 3</h3>
 # We have run an ILP to get tracks, visualized the output, evaluated the results, and added an Appear cost that does not take effect at the boundary. If you reach this Checkpoint early, try adjusting your weights or using different combinations of Costs and Constraints to get better results. For now, stick to those implemented in motile, but consider what kinds of custom costs and constraints you could implement to improve performance, since that is what we will do next!
 #
 # When most people have reached this checkpoint, we will go around and
@@ -604,7 +613,7 @@ get_metrics(gt_tracks, None, solution_graph, solution_seg)
 # 3. Add a new type of cost or constraint
 
 # %% [markdown]
-# # Task 5 - Incorporating Known Direction of Motion
+# ## Task 5 - Incorporating Known Direction of Motion
 #
 # Motile has built in the EdgeDistance as an edge selection cost, which penalizes longer edges by computing the Euclidean distance between the endpoints. However, in our dataset we see a trend of upward motion in the cells, and the false detections at the top are not moving. If we penalize movement based on what we expect, rather than Euclidean distance, we can select more correct cells and penalize the non-moving artefacts at the same time.
 #  
@@ -682,6 +691,12 @@ viewer.add_labels(solution_seg, name="solution_seg_with_drift")
 
 # %%
 get_metrics(gt_nx_graph, None, solution_graph, solution_seg)
+
+# %% [markdown]
+# ## Checkpoint 4
+# <div class="alert alert-block alert-success"><h3>Checkpoint 4</h3>
+# That is the end of the main exercise! If you have extra time, feel free to go onto the below bonus exercise to see how to learn the weights of your costs instead of setting them manually.
+# </div>
 
 # %% [markdown]
 # ## Bonus: Learning the Weights
