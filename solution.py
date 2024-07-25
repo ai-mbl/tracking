@@ -532,6 +532,77 @@ get_metrics(gt_nx_graph, None, solution_graph, solution_seg)
 # </div>
 
 # %%
-# TODO: Implement
+######################
+### YOUR CODE HERE ###
+######################
+drift = # fill in this
+
+def add_drift_dist_attr(cand_graph, drift):
+    for edge in cand_graph.edges():
+        ######################
+        ### YOUR CODE HERE ###
+        ######################
+        # get the location of the endpoints of the edge
+        # then compute the distance between the expected movement and the actual movement
+        # and save it in the "drift_dist" attribute (below)
+        cand_graph.edges[edge]["drift_dist"] = drift_dist
+
+add_drift_dist_attr(cand_graph, drift)
+cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="time")
+
+# %% tags=["solution"]
+drift = np.array([-20, 0])
+
+def add_drift_dist_attr(cand_graph, drift):
+    for edge in cand_graph.edges():
+        source, target = edge
+        source_pos = np.array(cand_graph.nodes[source]["pos"])
+        target_pos = np.array(cand_graph.nodes[target]["pos"])
+        expected_target_pos = source_pos + drift
+        drift_dist = np.linalg.norm(expected_target_pos - target_pos)
+        cand_graph.edges[edge]["drift_dist"] = drift_dist
+
+add_drift_dist_attr(cand_graph, drift)
+cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="time")
+
 
 # %%
+def solve_drift_optimization(graph, edge_weight, edge_constant):
+    """Set up and solve the network flow problem.
+
+    Args:
+        graph (motile.TrackGraph): The candidate graph.
+        edge_weight (float): The weighting factor of the edge selection cost.
+        edge_constant(float): The constant cost of selecting any edge.
+
+    Returns:
+        motile.Solver: The solver object, ready to be inspected.
+    """
+    solver = motile.Solver(graph)
+
+    solver.add_costs(
+        motile.costs.EdgeSelection(weight=edge_weight, constant=edge_constant, attribute="drift_dist")
+    )
+
+    solver.add_constraints(motile.constraints.MaxParents(1))
+    solver.add_constraints(motile.constraints.MaxChildren(2))
+
+    solution = solver.solve()
+
+    return solver
+
+solver = solve_drift_optimization(cand_trackgraph, 1, -20)
+solution_graph = graph_to_nx(solver.get_selected_subgraph())
+
+# %%
+tracks_layer = to_napari_tracks_layer(solution_graph, frame_key="time", location_key="pos", name="solution_tracks_with_drift")
+viewer.add_layer(tracks_layer)
+
+solution_seg = relabel_segmentation(solution_graph, segmentation)
+viewer.add_labels(solution_seg, name="solution_seg_with_drift")
+
+# %% [markdown]
+# ## Bonus: Learning the Weights
+
+# %% [markdown]
+#
