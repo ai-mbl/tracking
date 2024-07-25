@@ -169,25 +169,60 @@ viewer.add_layer(tracks_layer)
 
 
 # %% [markdown]
-# ## Task 2: Build a candidate graph from the detections
+# ## Build a candidate graph from the detections
 #
-# <div class="alert alert-block alert-info"><h3>Task 2: Build a candidate graph</h3>
-# </div>
-
-# %% [markdown]
 # We will represent a linking problem as a [directed graph](https://en.wikipedia.org/wiki/Directed_graph) that contains all possible detections (graph nodes) and links (graph edges) between them.
 #
 # Then we remove certain nodes and edges using discrete optimization techniques such as an integer linear program (ILP).
 #
-# First of all, we will build a candidate graph built from the detected cells in the video.
+# First of all, we will build a candidate graph built from the detected cells in the video. We have provided some segmentations that were generated with StartDist for use in tracking.
+# To feed these detections into our optimization task, we need to convert it into a "candidate graph" where each node in the graph represents one segmentation, and each edge represents a potential link between segmentations. This candidate graph will also contain features that will be used in the optimization task, such as position on nodes and scores on edges.
 
+
+# %% [markdown]
+# ## Task 2: Extract candidate nodes from the predicted segmentations
+#
+# First we need to turn each segmentation into a node in a `networkx.DiGraph`. 
+#
+# <div class="alert alert-block alert-info"><h3>Task 2: Extract candidate nodes from the predicted segmentations</h3>
+# Use <a href=https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.regionprops>skimage.measure.regionprops</a> to extract properties from each segmentation. Add a node for each segmentation with the id being the segmentation label. Each node should include "time" and "pos" (a list of [x, y]) attributes, where the "pos" is the centroid of the region.
+# </div>
 
 # %%
-gt_trackgraph = motile.TrackGraph(gt_tracks, frame_attribute="time")
-
 def nodes_from_segmentation(
     segmentation: np.ndarray, probabilities: np.ndarray
-) -> tuple[nx.DiGraph, dict[int, list[Any]]]:
+) ->  nx.DiGraph:
+    """Extract candidate nodes from a segmentation. Also computes specified attributes.
+    Returns a networkx graph with only nodes, and also a dictionary from frames to
+    node_ids for efficient edge adding.
+
+    Args:
+        segmentation (np.ndarray): A numpy array with integer labels and dimensions
+            (t, y, x), where h is the number of hypotheses.
+        probabilities (np.ndarray): A numpy array with integer labels and dimensions
+            (t, y, x), where h is the number of hypotheses.
+
+    Returns:
+        tuple[nx.DiGraph, dict[int, list[Any]]]: A candidate graph with only nodes,
+            and a mapping from time frames to node ids.
+    """
+    cand_graph = nx.DiGraph()
+    print("Extracting nodes from segmentation")
+    for t in tqdm(range(len(segmentation))):
+        segs = segmentation[t]
+
+        ### YOUR CODE HERE ###
+        
+    return cand_graph
+
+cand_graph = nodes_from_segmentation(segmentation, probabilities)
+print(cand_graph.number_of_nodes())
+
+
+# %% tags=["solution"]
+def nodes_from_segmentation(
+    segmentation: np.ndarray, probabilities: np.ndarray
+) ->  nx.DiGraph:
     """Extract candidate nodes from a segmentation. Also computes specified attributes.
     Returns a networkx graph with only nodes, and also a dictionary from frames to
     node_ids for efficient edge adding.
@@ -214,30 +249,47 @@ def nodes_from_segmentation(
             node_id = regionprop.label
             attrs = {
                 "time": t,
+                "pos": regionprop.centroid  #  y, x
             }
-            attrs["label"] = regionprop.label
-            centroid = regionprop.centroid  #  y, x
-            attrs["pos"] = centroid
-            probability = probabilities[t, int(centroid[0] // 2), int(centroid[1] // 2)]
-            attrs["prob"] = probability
             assert node_id not in cand_graph.nodes
             cand_graph.add_node(node_id, **attrs)
             nodes_in_frame.append(node_id)
+    return cand_graph
+
+cand_graph = nodes_from_segmentation(segmentation, probabilities)
+print(cand_graph.number_of_nodes())
+
+
+# %% [markdown]
+# After extracting the nodes, we need to add candidate edges. The function below adds candidate edges to a nodes-only graph by connecting all nodes in adjacent frames that are closer than a given max_edge_distance.
+#
+# Note: At the bottom of the cell, we add edges to our candidate graph with max_edge_distance=50. This is the maximum number of pixels that a cell centroid will be able to move between frames. If you want longer edges to be possible, you can increase this distance, but solving may take longer.
+
+# %%
+def _compute_node_frame_dict(cand_graph: nx.DiGraph) -> dict[int, list[Any]]:
+    """Compute dictionary from time frames to node ids for candidate graph.
+
+    Args:
+        cand_graph (nx.DiGraph): A networkx graph
+
+    Returns:
+        dict[int, list[Any]]: A mapping from time frames to lists of node ids.
+    """
+    node_frame_dict: dict[int, list[Any]] = {}
+    for node, data in cand_graph.nodes(data=True):
+        t = data["time"]
         if t not in node_frame_dict:
             node_frame_dict[t] = []
-        node_frame_dict[t].extend(nodes_in_frame)
-    return cand_graph, node_frame_dict
-
+        node_frame_dict[t].append(node)
+    return node_frame_dict
 
 def create_kdtree(cand_graph: nx.DiGraph, node_ids: Iterable[Any]) -> scipy.spatial.KDTree:
     positions = [cand_graph.nodes[node]["pos"] for node in node_ids]
     return scipy.spatial.KDTree(positions)
 
-
 def add_cand_edges(
     cand_graph: nx.DiGraph,
     max_edge_distance: float,
-    node_frame_dict: dict[int, list[Any]] = None,
 ) -> None:
     """Add candidate edges to a candidate graph by connecting all nodes in adjacent
     frames that are closer than max_edge_distance. Also adds attributes to the edges.
@@ -253,6 +305,7 @@ def add_cand_edges(
             to None.
     """
     print("Extracting candidate edges")
+    node_frame_dict = _compute_node_frame_dict(cand_graph)
 
     frames = sorted(node_frame_dict.keys())
     prev_node_ids = node_frame_dict[frames[0]]
@@ -273,9 +326,7 @@ def add_cand_edges(
         prev_node_ids = next_node_ids
         prev_kdtree = next_kdtree
 
-cand_graph, node_frame_dict = nodes_from_segmentation(segmentation, probabilities)
-print(cand_graph.number_of_nodes())
-add_cand_edges(cand_graph, max_edge_distance=50, node_frame_dict=node_frame_dict)
+add_cand_edges(cand_graph, max_edge_distance=50)
 cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="time")
 
 
@@ -446,7 +497,7 @@ def relabel_segmentation(
     for node_set in nx.weakly_connected_components(soln_copy):
         for node in node_set:
             time_frame = solution_nx_graph.nodes[node]["time"]
-            previous_seg_id = solution_nx_graph.nodes[node]["label"]
+            previous_seg_id = node
             previous_seg_mask = (
                 segmentation[time_frame] == previous_seg_id
             )
