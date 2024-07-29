@@ -17,20 +17,33 @@
 # %% [markdown]
 # # Exercise 9: Tracking-by-detection with an integer linear program (ILP)
 #
-# You could also run this notebook on your laptop, a GPU is not needed :).
+# Objective:
+# - Write a pipeline that takes in cell detections and links them across time to obtain lineage trees
+#
+# Methods/Tools:
+#
+# - **`networkx`**: To represent the tracking inputs and outputs as graphs. Tracking is often framed
+#     as a graph optimization problem. Nodes in the graph represent detections, and edges represent links
+#     across time. The "tracking" task is then framed as selecting the correct edges to link your detections.
+# - **`motile`**: To set up and solve an Integer Lineage Program (ILP) for tracking.
+#     ILP-based methods frame tracking as a constrained optimization problem. The task is to select a subset of nodes/edges from a "candidate graph" of all possible nodes/edges. The subset must minimize user-defined costs (e.g. edge distance), while also satisfying a set of tracking constraints (e.g. each cell is linked to at most one cell in the previous frame). Note: this tracking approach is not inherently using
+#     "deep learning" - the costs and constraints are usually hand-crafted to encode biological and data-based priors, although cost features can also be learned from data.
+# - **`napari`**: To visualize tracking inputs and outputs. Qualitative analysis is crucial for tuning the 
+#     weights of the objective function and identifying data-specific costs and constraints.
+# - **`traccuracy`**: To evaluate tracking results. Metrics such as accuracy can be misleading for tracking,
+#     because rare events such as divisions are much harder than the common linking tasks, and might
+#     be more biologically relevant for downstream analysis. Therefore, it is important to evaluate on
+#     a wide range of error metrics and determine which are most important for your use case.
+#
+# After running through the full tracking pipeline, from loading to evaluation, we will learn how to **incorporate custom costs** based on dataset-specific prior information. As a bonus exercise, 
+# you can learn how to **learn the best cost weights** for a task from
+# from a small amount of ground truth tracking information.
+#
+# You can run this notebook on your laptop, a GPU is not needed.
 #
 # <div class="alert alert-danger">
 # Set your python kernel to <code>09-tracking</code>
 # </div>
-#
-# You will learn:
-# - how to represent tracking inputs and outputs as a graph using the `networkx` library
-# - how to use [`motile`](https://funkelab.github.io/motile/) to solve tracking via global optimization
-# - how to visualize tracking inputs and outputs
-# - how to evaluate tracking and understand common tracking metrics
-# - how to add custom costs to the candidate graph and incorpate them into `motile`
-# - how to learn the best **hyperparameters** of the ILP using an SSVM (bonus)
-#
 #
 # Places where you are expected to write code are marked with
 # ```
@@ -47,16 +60,10 @@
 # %autoreload 2
 
 # %%
-# Notebook at full width in the browser
-from IPython.display import display, HTML
-
-display(HTML("<style>.container { width:100% !important; }</style>"))
-
 import time
 from pathlib import Path
 
 import skimage
-import pandas as pd
 import numpy as np
 import napari
 import networkx as nx
@@ -649,10 +656,10 @@ get_metrics(gt_tracks, None, solution_graph, solution_seg)
 # %% [markdown]
 # ## Checkpoint 3
 # <div class="alert alert-block alert-success"><h3>Checkpoint 3</h3>
-# We have run an ILP to get tracks, visualized the output, evaluated the results, and added an Appear cost that does not take effect at the boundary. If you reach this Checkpoint early, try adjusting your weights or using different combinations of Costs and Constraints to get better results. For now, stick to those implemented in motile, but consider what kinds of custom costs and constraints you could implement to improve performance, since that is what we will do next!
+# We have run an ILP to get tracks, visualized the output, evaluated the results, and added an Appear cost that does not take effect at the boundary. If you reach this Checkpoint early, try adjusting your weights or using different combinations of built-in Costs and Constraints to get better results. Also consider custom Costs or Constraints that would help for this task!
 #
 # When most people have reached this checkpoint, we will go around and
-# share what worked and what didn't, and discuss ideas for custom costs or constraints.
+# share what worked and what did not, and discuss ideas for custom costs or constraints.
 # </div>
 
 # %% [markdown]
