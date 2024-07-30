@@ -25,6 +25,7 @@ pip install plotly
 pip install matplotlib
 pip install ipywidgets
 pip install nbformat
+pip install pandas
 
 # Make environment discoverable by Jupyter
 pip install ipykernel
