@@ -22,7 +22,7 @@ and updated for 2024 by Caroline Malin-Mayor.
     ```
     , double-click on the `exercise.ipynb` files and follow the instructions in the notebook.
     
-    Alternatively, open `exercise.ipynb` in VSCode with the jupyter extension.
+    Alternatively, open `exercise.ipynb` in VSCode with the jupyter extension and the `09-tracking` environment activated.
 
 
 ## Overview: Tracking by detection with an integer linear program (ILP)
