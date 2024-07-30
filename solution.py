@@ -213,7 +213,7 @@ viewer.add_layer(tracks_layer)
 
 
 # %% [markdown]
-# ## Task 2: Extract candidate nodes from the predicted segmentations
+# ### Task 2: Extract candidate nodes from the predicted segmentations
 #
 # First we need to turn each segmentation into a node in a `networkx.DiGraph`. 
 #
@@ -297,9 +297,19 @@ for node, data in cand_graph.nodes(data=True):
     assert type(data["pos"][0]) in [float, np.float64], f"'pos' attribute element 0 has type {type(data['pos'][0])}, expected 'float' or 'np.float64"
 print("Your candidate graph passed all the tests!")
 
+# %% [markdown]
+# We can visualize our candidate points using the napari Points layer. You should see one point in the center of each segmentation when we display it using the below cell.
+
+# %%
+points_array = np.array([[data["time"], *data["pos"]] for node, data in cand_graph.nodes(data=True)])
+cand_points_layer = napari.layers.Points(data=points_array, name="cand_points")
+viewer.add_layer(cand_points_layer)
+
 
 # %% [markdown]
-# After extracting the nodes, we need to add candidate edges. The function below adds candidate edges to a nodes-only graph by connecting all nodes in adjacent frames that are closer than a given max_edge_distance.
+# ### Adding Candidate Edges
+#
+# After extracting the nodes, we need to add candidate edges. The `add_cand_edges` function below adds candidate edges to a nodes-only graph by connecting all nodes in adjacent frames that are closer than a given max_edge_distance.
 #
 # Note: At the bottom of the cell, we add edges to our candidate graph with max_edge_distance=50. This is the maximum number of pixels that a cell centroid will be able to move between frames. If you want longer edges to be possible, you can increase this distance, but solving may take longer.
 
@@ -365,14 +375,20 @@ def add_cand_edges(
         prev_kdtree = next_kdtree
 
 add_cand_edges(cand_graph, max_edge_distance=50)
-cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="time")
+
+# %% [markdown]
+# Visualizing the candidate edges in napari is, unfortunately, not yet possible. However, we can print out the number of candidate nodes and edges, and compare it to the ground truth nodes and edgesedges. We should see that we have a few more candidate nodes than ground truth (due to false positive detections) and many more candidate edges than ground truth - our next step will be to use optimization to pick a subset of the candidate nodes and edges to generate our solution tracks.
+
+# %%
+print(f"Our candidate graph has {cand_graph.number_of_nodes()} nodes and {cand_graph.number_of_edges()} edges")
+print(f"Our ground truth track graph has {gt_tracks.number_of_nodes()} nodes and {gt_tracks.number_of_edges()}")
 
 
 # %% [markdown]
 # ## Checkpoint 1
 # <div class="alert alert-block alert-success"><h3>Checkpoint 1: We have visualized our data in napari and set up a candidate graph with all possible detections and links that we could select with our optimization task. </h3>
 #
-# We will now together go through the `motile` <a href=https://funkelab.github.io/motile/quickstart.html#sec-quickstart>quickstart</a> example before you actually set up and run your own motile optimization.
+# We will now together go through the `motile` <a href=https://funkelab.github.io/motile/quickstart.html#sec-quickstart>quickstart</a> example before you actually set up and run your own motile optimization. If you reach this checkpoint early, feel free to start reading through the quickstart and think of questions you want to ask!
 # </div>
 
 # %% [markdown]
@@ -387,57 +403,71 @@ cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="time")
 # A set of linear constraints ensures that the solution will be a feasible cell tracking graph. For example, if an edge is part of $\tilde{G}$, both its incident nodes have to be part of $\tilde{G}$ as well.
 #
 # `motile` ([docs here](https://funkelab.github.io/motile/)), makes it easy to link with an ILP in python by implementing commong linking constraints and costs. 
+#
+# TODO: delete this?
 
 # %% [markdown]
-# ## Task 3 - Basic Tracking with Motile
+# ## Task 3 - Basic tracking with motile
 # <div class="alert alert-block alert-info"><h3>Task 3: Set up a basic motile tracking pipeline</h3>
-# <p>Use the motile <a href=https://funkelab.github.io/motile/quickstart.html#sec-quickstart>quickstart</a> example to set up a basic motile pipeline for our task. Then run the function and find hyperparmeters that give you tracks.</p>
+# <p>Use the motile <a href=https://funkelab.github.io/motile/quickstart.html#sec-quickstart>quickstart</a> example to set up a basic motile pipeline for our task. 
+#
+# Here are some key similarities and differences between the quickstart and our task:
+# <ul>
+#     <li>We do not have scores on our nodes. This means we do not need to include a `NodeSelection` cost.</li>
+#     <li>We also do not have scores on our edges. However, we can use the edge distance as a cost, so that longer edges are more costly than shorter edges. Instead of using the `EdgeSelection` cost, we can use the <a href=https://funkelab.github.io/motile/api.html#edgedistance>`EdgeDistance`</a> cost with `position_attribute="pos"`. You will want a positive weight, since higher distances should be more costly, unlike in the example when higher scores were good and so we inverted them with a negative weight.</li>
+#     <li>Because distance is always positive, and you want a positive weight, you will want to include a negative constant on the `EdgeDistance` cost. If there are no negative selection costs, the ILP will always select nothing, because the cost of selecting nothing is zero.</li>
+#     <li>We want to allow divisions. So, we should pass in 2 to our `MaxChildren` constraint. The `MaxParents` constraint should have 1, the same as the quickstart, because neither task allows merging.</li>
+#     <li>You should include an Appear cost similar to the one in the quickstart.</li>
+# </ul>
+#
+# Once you have set up the basic motile optimization task in the function below, you will probably need to adjust the weight and constant values on your costs until you get a solution that looks reasonable.
+#
+# </p>
 # </div>
 #
 
-# %%
-def solve_basic_optimization(graph, edge_weight, edge_constant):
+# %% tags=["task"]
+def solve_basic_optimization(graph):
     """Set up and solve the network flow problem.
 
     Args:
         graph (motile.TrackGraph): The candidate graph.
-        edge_weight (float): The weighting factor of the edge selection cost.
-        edge_constant(float): The constant cost of selecting any edge.
 
     Returns:
-        motile.Solver: The solver object, ready to be inspected.
+        nx.DiGraph: The networkx digraph with the selected solution tracks
     """
     solver = motile.Solver(graph)
     ### YOUR CODE HERE ###
     solution = solver.solve()
-
-    return solver
+    solution_graph = graph_to_nx(solver.get_selected_subgraph())
+    return solution_graph
 
 
 # %% tags=["solution"]
-def solve_basic_optimization(graph, edge_weight, edge_constant):
+def solve_basic_optimization(cand_graph):
     """Set up and solve the network flow problem.
 
     Args:
-        graph (motile.TrackGraph): The candidate graph.
-        edge_weight (float): The weighting factor of the edge selection cost.
-        edge_constant(float): The constant cost of selecting any edge.
+        graph (nx.DiGraph): The candidate graph.
 
     Returns:
-        motile.Solver: The solver object, ready to be inspected.
+        nx.DiGraph: The networkx digraph with the selected solution tracks
     """
-    solver = motile.Solver(graph)
+
+    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="time")
+    solver = motile.Solver(cand_trackgraph)
 
     solver.add_costs(
-        motile.costs.EdgeDistance(weight=edge_weight, constant=edge_constant, position_attribute="pos")
+        motile.costs.EdgeDistance(weight=1, constant=-20, position_attribute="pos")
     )
+    solver.add_costs(motile.costs.Appear(constant=1.0))
 
     solver.add_constraints(motile.constraints.MaxParents(1))
     solver.add_constraints(motile.constraints.MaxChildren(2))
 
     solution = solver.solve()
-
-    return solver
+    solution_graph = graph_to_nx(solver.get_selected_subgraph())
+    return solution_graph
 
 
 # %% [markdown]
@@ -445,24 +475,8 @@ def solve_basic_optimization(graph, edge_weight, edge_constant):
 
 # %%
 from motile_toolbox.candidate_graph import graph_to_nx
-def print_solution_stats(solver, graph, gt_graph):
-    """Prints the number of nodes and edges for candidate, ground truth graph, and solution graph.
-
-    Args:
-        solver: motile.Solver, after calling solver.solve()
-        graph: motile.TrackGraph, candidate graph
-        gt_graph: motile.TrackGraph, ground truth graph
-    """
-    time.sleep(0.1)  # to wait for ilpy prints
-    print(
-        f"\nCandidate graph\t\t{len(graph.nodes):3} nodes\t{len(graph.edges):3} edges"
-    )
-    print(
-        f"Ground truth graph\t{len(gt_graph.nodes):3} nodes\t{len(gt_graph.edges):3} edges"
-    )
-    solution = graph_to_nx(solver.get_selected_subgraph())
-
-    print(f"Solution graph\t\t{solution.number_of_nodes()} nodes\t{solution.number_of_edges()} edges")
+def print_graph_stats(graph, name):
+    print(f"{name}\t\t{graph.number_of_nodes()} nodes\t{graph.number_of_edges()} edges\t{len(list(nx.weakly_connected_components(graph)))} tracks")
 
 
 # %% [markdown]
@@ -475,36 +489,42 @@ def print_solution_stats(solver, graph, gt_graph):
 # Our integer linear program (ILP) tries to use the proprietary solver Gurobi. You probably don't have a license, in which case the ILP will fall back to the open source solver SCIP.
 # </div>
 
-# %% tags=["solution"]
-# Solution
+# %%
+# run this cell to actually run the solving and get a solution
+solution_tracks = solve_basic_optimization(cand_graph)
 
-edge_weight = 1
-edge_constant=-20
-solver = solve_basic_optimization(cand_trackgraph, edge_weight, edge_constant)
-solution_graph = graph_to_nx(solver.get_selected_subgraph())
-print_solution_stats(solver, cand_trackgraph, gt_trackgraph)
+# then print some statistics about the solution compared to the ground truth
+print_graph_stats(solution_tracks, "solution")
+print_graph_stats(gt_tracks, "gt tracks")
 
-"""
-Explanation: Since the ILP formulation is a minimization problem, the total weight of each node and edge needs to be negative.
-The cost of each node corresponds to its detection probability, so we can simply mulitply with `node_weight=-1`.
-The cost of each edge corresponds to 1 - distance between the two nodes, so agai we can simply mulitply with `edge_weight=-1`.
 
-Futhermore, each detection (node) should maximally be linked to one other detection in the previous and next frames, so we set `max_flow=1`.
-"""
 
+# %% [markdown]
+# <div class="alert alert-block alert-warning"><h3>Question 1: Interpret your results based on statistics</h3>
+# <p>
+# What do these printed statistics tell you about your solution? What else would you like to know?
+# </p>
+# </div>
 
 # %% [markdown]
 # ## Visualize the Result
+# Rather than just looking at printed statistics about our solution, let's visualize it in `napari`.
+#
+# This involves two steps:
+# 1. First, we can add a tracks layer with the solution graph.
+# 2. Second, we can add another segmentation layer, where the segmentations are relabeled so that the same cell will be the same color over time. Cells will still change color at division.
+#
+# Note that bad tracking results at this point does not mean that you implemented anything wrong! We still need to customize our costs and constraints to the task before we can get good results. As long as your pipeline selects something, and you can kind of interepret why it is going wrong, that is all that is needed at this point.
 
 # %%
+# Add a tracks layer
 tracks_layer = to_napari_tracks_layer(solution_graph, frame_key="time", location_key="pos", name="solution_tracks")
 viewer.add_layer(tracks_layer)
 
-# %% [markdown]
-# ### Recolor detections in napari according to solution and compare to ground truth
-
 
 # %%
+# recolor the segmentation
+
 def relabel_segmentation(
     solution_nx_graph: nx.DiGraph,
     segmentation: np.ndarray,
@@ -547,19 +567,20 @@ def relabel_segmentation(
 solution_seg = relabel_segmentation(solution_graph, segmentation)
 viewer.add_labels(solution_seg, name="solution_seg")
 
-# %%
-# viewer = napari.viewer.current_viewer()
-# if viewer:
-#     viewer.close()
-
+# %% [markdown]
+# <div class="alert alert-block alert-warning"><h3>Question 2: Interpret your results based on visualization</h3>
+# <p>
+# How is your solution based on looking at the visualization? When is it doing well? When is it doing poorly?
+# </p>
+# </div>
+#
 
 # %% [markdown]
 # ## Checkpoint 2
 # <div class="alert alert-block alert-success"><h3>Checkpoint 2</h3>
 # We have set up and run a basic ILP to get tracks and visualized the output.  
-# Based on the visualization, how good is this ILP? What types of errors does it make? Why do you think it performs well or poorly?
 #
-# We will discuss this together soon, so think about possible improvements if you have extra time.
+# We will go over the code and discuss the answers to Questions 1 and 2 together soon. If you have extra time, think about what kinds of improvements you could make to the costs and constraints to fix the issues that you are seeing. You can even try tuning your weights and constants, or adding or removing motile Costs and Constraints, and seeing how that changes the output.
 # </div>
 
 # %% [markdown]
