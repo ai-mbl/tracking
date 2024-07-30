@@ -135,7 +135,7 @@ viewer.add_image(probabilities, name="probs", scale=(1, 2, 2))
 #
 # <div class="alert alert-block alert-info"><h3>Task 1: Read in the ground truth graph</h3>
 #
-# For this task, you will read in the csv and store the tracks as a `networkx` DiGraph. Take a look at the documentation for the DiGraph <a href=https://networkx.org/documentation/stable/reference/classes/digraph.html>here</a> to learn how to create a graph, add nodes and edges with attributes, and access those nodes and edges.
+# For this task, you will read in the csv and store the tracks as a <a href=https://en.wikipedia.org/wiki/Directed_graph>directed graph</a> using the `networkx` library. Take a look at the documentation for the networkx DiGraph <a href=https://networkx.org/documentation/stable/reference/classes/digraph.html>here</a> to learn how to create a graph, add nodes and edges with attributes, and access those nodes and edges.
 #
 # Here are the requirements for the graph:
 # <ol>
@@ -193,14 +193,23 @@ for node, data in gt_tracks.nodes(data=True):
 print("Your graph passed all the tests!")
 
 # %% [markdown]
+# We can also use the helper function `to_napari_tracks_layer` to visualize the ground truth tracks in our napari viewer.
+
+# %%
+tracks_layer = to_napari_tracks_layer(
+    gt_tracks, frame_key="time", location_key="pos", name="gt_tracks"
+)
+viewer.add_layer(tracks_layer)
+
+# %% [markdown]
 # ## Build a candidate graph from the detections
 #
-# We will represent a linking problem as a [directed graph](https://en.wikipedia.org/wiki/Directed_graph) that contains all possible detections (graph nodes) and links (graph edges) between them.
+# To set up our tracking problem, we will create a "candidate graph" - a DiGraph that contains all possible detections (graph nodes) and links (graph edges) between them.
 #
-# Then we remove certain nodes and edges using discrete optimization techniques such as an integer linear program (ILP).
+# Then we use an optimization method called an integer linear program (ILP) to select the best nodes and edges from the candidate graph to generate our final tracks.
 #
-# First of all, we will build a candidate graph built from the detected cells in the video. We have provided some segmentations that were generated with StartDist for use in tracking.
-# To feed these detections into our optimization task, we need to convert it into a "candidate graph" where each node in the graph represents one segmentation, and each edge represents a potential link between segmentations. This candidate graph will also contain features that will be used in the optimization task, such as position on nodes and scores on edges.
+# To create our candidate graph, we will use the provided StarDist segmentations.
+# Each node in the candidate graph represents one segmentation, and each edge represents a potential link between segmentations. This candidate graph will also contain features that will be used in the optimization task, such as position on nodes and, later, customized scores on edges.
 
 
 # %% [markdown]
@@ -209,79 +218,84 @@ print("Your graph passed all the tests!")
 # First we need to turn each segmentation into a node in a `networkx.DiGraph`. 
 #
 # <div class="alert alert-block alert-info"><h3>Task 2: Extract candidate nodes from the predicted segmentations</h3>
-# Use <a href=https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.regionprops>skimage.measure.regionprops</a> to extract properties from each segmentation. Add a node for each segmentation with the id being the segmentation label. Each node should include "time" and "pos" (a list of [x, y]) attributes, where the "pos" is the centroid of the region.
+# Use <a href=https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.regionprops>skimage.measure.regionprops</a> to extract properties from each segmentation, and create a candidate graph with nodes only.
+#
+#
+# Here are the requirements for the output graph:
+# <ol>
+#     <li>Each detection (unique label id) in the segmentation becomes a node in the graph</li>
+#     <li>The node id is the label of the detection</li>
+#     <li>Each node has an integer "time" attribute, based on the index into the first dimension of the input segmentation array</li>
+#     <li>Each node has a list[float] "pos" attribute containing the ["x", "y"] values from the centroid of the detection region</li>
+#     <li>The graph has no edges (yet!)</li>
+# </ol>
 # </div>
 
-# %%
-def nodes_from_segmentation(
-    segmentation: np.ndarray, probabilities: np.ndarray
-) ->  nx.DiGraph:
-    """Extract candidate nodes from a segmentation. Also computes specified attributes.
-    Returns a networkx graph with only nodes, and also a dictionary from frames to
-    node_ids for efficient edge adding.
+# %% tags=["task"]
+def nodes_from_segmentation(segmentation: np.ndarray) -> nx.DiGraph:
+    """Extract candidate nodes from a segmentation. 
 
     Args:
         segmentation (np.ndarray): A numpy array with integer labels and dimensions
-            (t, y, x), where h is the number of hypotheses.
-        probabilities (np.ndarray): A numpy array with integer labels and dimensions
-            (t, y, x), where h is the number of hypotheses.
+            (t, y, x).
 
     Returns:
-        tuple[nx.DiGraph, dict[int, list[Any]]]: A candidate graph with only nodes,
-            and a mapping from time frames to node ids.
+        nx.DiGraph: A candidate graph with only nodes.
     """
     cand_graph = nx.DiGraph()
     print("Extracting nodes from segmentation")
     for t in tqdm(range(len(segmentation))):
-        segs = segmentation[t]
-
-        ### YOUR CODE HERE ###
+        seg_frame = segmentation[t]
+        props = skimage.measure.regionprops(segs)
+        for regionprop in props:
+            ### YOUR CODE HERE ###
         
     return cand_graph
 
-cand_graph = nodes_from_segmentation(segmentation, probabilities)
-print(cand_graph.number_of_nodes())
+cand_graph = nodes_from_segmentation(segmentation)
 
 
 # %% tags=["solution"]
-def nodes_from_segmentation(
-    segmentation: np.ndarray, probabilities: np.ndarray
-) ->  nx.DiGraph:
-    """Extract candidate nodes from a segmentation. Also computes specified attributes.
-    Returns a networkx graph with only nodes, and also a dictionary from frames to
-    node_ids for efficient edge adding.
+def nodes_from_segmentation(segmentation: np.ndarray) -> nx.DiGraph:
+    """Extract candidate nodes from a segmentation. 
 
     Args:
         segmentation (np.ndarray): A numpy array with integer labels and dimensions
-            (t, y, x), where h is the number of hypotheses.
-        probabilities (np.ndarray): A numpy array with integer labels and dimensions
-            (t, y, x), where h is the number of hypotheses.
+            (t, y, x).
 
     Returns:
-        tuple[nx.DiGraph, dict[int, list[Any]]]: A candidate graph with only nodes,
-            and a mapping from time frames to node ids.
+        nx.DiGraph: A candidate graph with only nodes.
     """
     cand_graph = nx.DiGraph()
-    # also construct a dictionary from time frame to node_id for efficiency
-    node_frame_dict: dict[int, list[Any]] = {}
     print("Extracting nodes from segmentation")
     for t in tqdm(range(len(segmentation))):
-        segs = segmentation[t]
-        nodes_in_frame = []
-        props = skimage.measure.regionprops(segs)
+        seg_frame = segmentation[t]
+        props = skimage.measure.regionprops(seg_frame)
         for regionprop in props:
             node_id = regionprop.label
             attrs = {
                 "time": t,
-                "pos": regionprop.centroid  #  y, x
+                "pos": list(regionprop.centroid)  #  x, y
             }
             assert node_id not in cand_graph.nodes
             cand_graph.add_node(node_id, **attrs)
-            nodes_in_frame.append(node_id)
     return cand_graph
 
-cand_graph = nodes_from_segmentation(segmentation, probabilities)
-print(cand_graph.number_of_nodes())
+cand_graph = nodes_from_segmentation(segmentation)
+
+# %%
+# run this cell to test your implementation of the candidate graph
+assert cand_graph.number_of_nodes() == 6123, f"Found {cand_graph.number_of_nodes()} nodes, expected 6123"
+assert cand_graph.number_of_edges() == 0, f"Found {cand_graph.number_of_edges()} edges, expected 0"
+for node, data in cand_graph.nodes(data=True):
+    assert type(node) == int, f"Node id {node} has type {type(node)}, expected 'int'"
+    assert "time" in data, f"'time' attribute missing for node {node}"
+    assert type(data["time"]) == int, f"'time' attribute has type {type(data['time'])}, expected 'int'"
+    assert "pos" in data, f"'pos' attribute missing for node {node}"
+    assert type(data["pos"]) == list, f"'pos' attribute has type {type(data['pos'])}, expected 'list'"
+    assert len(data["pos"]) == 2, f"'pos' attribute has length {len(data['pos'])}, expected 2"
+    assert type(data["pos"][0]) in [float, np.float64], f"'pos' attribute element 0 has type {type(data['pos'][0])}, expected 'float' or 'np.float64"
+print("Your candidate graph passed all the tests!")
 
 
 # %% [markdown]
