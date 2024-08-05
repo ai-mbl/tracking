@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # ---
 # jupyter:
 #   jupytext:
@@ -25,7 +26,7 @@
 # - **`networkx`**: To represent the tracking inputs and outputs as graphs. Tracking is often framed
 #     as a graph optimization problem. Nodes in the graph represent detections, and edges represent links
 #     across time. The "tracking" task is then framed as selecting the correct edges to link your detections.
-# - **`motile`**: To set up and solve an Integer Lineage Program (ILP) for tracking.
+# - **`motile`**: To set up and solve an Integer Linear Program (ILP) for tracking.
 #     ILP-based methods frame tracking as a constrained optimization problem. The task is to select a subset of nodes/edges from a "candidate graph" of all possible nodes/edges. The subset must minimize user-defined costs (e.g. edge distance), while also satisfying a set of tracking constraints (e.g. each cell is linked to at most one cell in the previous frame). Note: this tracking approach is not inherently using
 #     "deep learning" - the costs and constraints are usually hand-crafted to encode biological and data-based priors, although cost features can also be learned from data.
 # - **`napari`**: To visualize tracking inputs and outputs. Qualitative analysis is crucial for tuning the 
@@ -59,6 +60,10 @@
 # %load_ext autoreload
 # %autoreload 2
 # TODO: remove
+import motile
+
+
+
 
 # %%
 import time
@@ -74,18 +79,16 @@ import scipy
 pio.renderers.default = "vscode"
 
 import motile
-from motile.plot import draw_track_graph, draw_solution
-from utils import InOutSymmetry, MinTrackLength
 
+import zarr
+from motile_toolbox.visualization import to_napari_tracks_layer
+from motile_toolbox.candidate_graph import graph_to_nx
+from napari.layers import Tracks
 import traccuracy
 from traccuracy import run_metrics
 from traccuracy.metrics import CTCMetrics, DivisionMetrics
-from traccuracy.matchers import CTCMatcher
-import zarr
-from motile_toolbox.visualization import to_napari_tracks_layer
-from napari.layers import Tracks
+from traccuracy.matchers import IOUMatcher
 from csv import DictReader
-import pandas as pd
 
 from tqdm.auto import tqdm
 
@@ -101,10 +104,10 @@ from typing import Iterable, Any
 # Here we load the raw image data, segmentation, and probabilities from the zarr, and view them in napari.
 
 # %%
-data_path = "data/breast_cancer_fluo.zarr"
+data_path = "./data/breast_cancer_fluo.zarr"
 data_root = zarr.open(data_path, 'r')
 image_data = data_root["raw"][:]
-segmentation = data_root["seg_relabeled"][:]
+segmentation = data_root["seg"][:]
 probabilities = data_root["probs"][:]
 
 # %% [markdown]
@@ -118,7 +121,7 @@ viewer.add_image(probabilities, name="probs", scale=(1, 2, 2))
 
 
 # %% [markdown]
-# ## Task 1: Read in the ground truth graph
+# ## Read in the ground truth graph
 #
 # In addition to the image data and segmentations, we also have a ground truth tracking solution.
 # The ground truth tracks are stored in a CSV with five columns: id, time, x, y, and parent_id.
@@ -141,8 +144,8 @@ viewer.add_image(probabilities, name="probs", scale=(1, 2, 2))
 # <ol>
 #     <li>Each row in the CSV becomes a node in the graph</li>
 #     <li>The node id is an integer specified by the "id" column in the csv</li>
-#     <li>Each node has an integer "time" attribute specified by the "time" column in the csv</li>
-#     <li>Each node has a list[float] "pos" attribute containing the ["x", "y"] values from the csv</li>
+#     <li>Each node has an integer "t" attribute specified by the "time" column in the csv</li>
+#     <li>Each node has float "x", "y" attributes storing the corresponding values from the csv</li>
 #     <li>If the parent_id is not -1, then there is an edge in the graph from "parent_id" to "id"</li>
 # </ol>
 #
@@ -167,8 +170,9 @@ def read_gt_tracks():
         for row in reader:
             _id = int(row["id"])
             attrs = {
-                "pos": [float(row["x"]), float(row["y"])],
-                "time": int(row["time"]),
+                "x": float(row["x"]),
+                "y": float(row["y"]),
+                "t": int(row["time"]),
             }
             parent_id = int(row["parent_id"])
             gt_tracks.add_node(_id, **attrs)
@@ -184,12 +188,12 @@ assert gt_tracks.number_of_nodes() == 5490, f"Found {gt_tracks.number_of_nodes()
 assert gt_tracks.number_of_edges() == 5120, f"Found {gt_tracks.number_of_edges()} edges, expected 5120"
 for node, data in gt_tracks.nodes(data=True):
     assert type(node) == int, f"Node id {node} has type {type(node)}, expected 'int'"
-    assert "time" in data, f"'time' attribute missing for node {node}"
-    assert type(data["time"]) == int, f"'time' attribute has type {type(data['time'])}, expected 'int'"
-    assert "pos" in data, f"'pos' attribute missing for node {node}"
-    assert type(data["pos"]) == list, f"'pos' attribute has type {type(data['pos'])}, expected 'list'"
-    assert len(data["pos"]) == 2, f"'pos' attribute has length {len(data['pos'])}, expected 2"
-    assert type(data["pos"][0]) == float, f"'pos' attribute element 0 has type {type(data['pos'][0])}, expected 'float'"
+    assert "t" in data, f"'t' attribute missing for node {node}"
+    assert type(data["t"]) == int, f"'t' attribute has type {type(data['t'])}, expected 'int'"
+    assert "x" in data, f"'x' attribute missing for node {node}"
+    assert type(data["x"]) == float, f"'x' attribute has type {type(data['x'])}, expected 'float'"
+    assert "y" in data, f"'y' attribute missing for node {node}"
+    assert type(data["y"]) == float, f"'y' attribute has type {type(daåa['y'])}, expected 'float'"
 print("Your graph passed all the tests!")
 
 # %% [markdown]
@@ -213,11 +217,8 @@ viewer.add_layer(tracks_layer)
 
 
 # %% [markdown]
-# ### Task 2: Extract candidate nodes from the predicted segmentations
-#
-# First we need to turn each segmentation into a node in a `networkx.DiGraph`. 
-#
 # <div class="alert alert-block alert-info"><h3>Task 2: Extract candidate nodes from the predicted segmentations</h3>
+# First we need to turn each segmentation into a node in a `networkx.DiGraph`. 
 # Use <a href=https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.regionprops>skimage.measure.regionprops</a> to extract properties from each segmentation, and create a candidate graph with nodes only.
 #
 #
@@ -225,8 +226,8 @@ viewer.add_layer(tracks_layer)
 # <ol>
 #     <li>Each detection (unique label id) in the segmentation becomes a node in the graph</li>
 #     <li>The node id is the label of the detection</li>
-#     <li>Each node has an integer "time" attribute, based on the index into the first dimension of the input segmentation array</li>
-#     <li>Each node has a list[float] "pos" attribute containing the ["x", "y"] values from the centroid of the detection region</li>
+#     <li>Each node has an integer "t" attribute, based on the index into the first dimension of the input segmentation array</li>
+#     <li>Each node has float "x" and "y" attributes containing the "x" and "y" values from the centroid of the detection region</li>
 #     <li>The graph has no edges (yet!)</li>
 # </ol>
 # </div>
@@ -246,7 +247,7 @@ def nodes_from_segmentation(segmentation: np.ndarray) -> nx.DiGraph:
     print("Extracting nodes from segmentation")
     for t in tqdm(range(len(segmentation))):
         seg_frame = segmentation[t]
-        props = skimage.measure.regionprops(segs)
+        props = skimage.measure.regionprops(seg_frame)
         for regionprop in props:
             ### YOUR CODE HERE ###
         
@@ -274,8 +275,9 @@ def nodes_from_segmentation(segmentation: np.ndarray) -> nx.DiGraph:
         for regionprop in props:
             node_id = regionprop.label
             attrs = {
-                "time": t,
-                "pos": list(regionprop.centroid)  #  x, y
+                "t": t,
+                "x": float(regionprop.centroid[0]),
+                "y": float(regionprop.centroid[1]),
             }
             assert node_id not in cand_graph.nodes
             cand_graph.add_node(node_id, **attrs)
@@ -289,19 +291,19 @@ assert cand_graph.number_of_nodes() == 6123, f"Found {cand_graph.number_of_nodes
 assert cand_graph.number_of_edges() == 0, f"Found {cand_graph.number_of_edges()} edges, expected 0"
 for node, data in cand_graph.nodes(data=True):
     assert type(node) == int, f"Node id {node} has type {type(node)}, expected 'int'"
-    assert "time" in data, f"'time' attribute missing for node {node}"
-    assert type(data["time"]) == int, f"'time' attribute has type {type(data['time'])}, expected 'int'"
-    assert "pos" in data, f"'pos' attribute missing for node {node}"
-    assert type(data["pos"]) == list, f"'pos' attribute has type {type(data['pos'])}, expected 'list'"
-    assert len(data["pos"]) == 2, f"'pos' attribute has length {len(data['pos'])}, expected 2"
-    assert type(data["pos"][0]) in [float, np.float64], f"'pos' attribute element 0 has type {type(data['pos'][0])}, expected 'float' or 'np.float64"
+    assert "t" in data, f"'t' attribute missing for node {node}"
+    assert type(data["t"]) == int, f"'t' attribute has type {type(data['t'])}, expected 'int'"
+    assert "x" in data, f"'x' attribute missing for node {node}"
+    assert type(data["x"]) == float, f"'x' attribute has type {type(data['x'])}, expected 'float'"
+    assert "y" in data, f"'y' attribute missing for node {node}"
+    assert type(data["y"]) == float, f"'y' attribute has type {type(daåa['y'])}, expected 'float'"
 print("Your candidate graph passed all the tests!")
 
 # %% [markdown]
 # We can visualize our candidate points using the napari Points layer. You should see one point in the center of each segmentation when we display it using the below cell.
 
 # %%
-points_array = np.array([[data["time"], *data["pos"]] for node, data in cand_graph.nodes(data=True)])
+points_array = np.array([[data["t"], data["x"], data["y"]] for node, data in cand_graph.nodes(data=True)])
 cand_points_layer = napari.layers.Points(data=points_array, name="cand_points")
 viewer.add_layer(cand_points_layer)
 
@@ -325,14 +327,14 @@ def _compute_node_frame_dict(cand_graph: nx.DiGraph) -> dict[int, list[Any]]:
     """
     node_frame_dict: dict[int, list[Any]] = {}
     for node, data in cand_graph.nodes(data=True):
-        t = data["time"]
+        t = data["t"]
         if t not in node_frame_dict:
             node_frame_dict[t] = []
         node_frame_dict[t].append(node)
     return node_frame_dict
 
 def create_kdtree(cand_graph: nx.DiGraph, node_ids: Iterable[Any]) -> scipy.spatial.KDTree:
-    positions = [cand_graph.nodes[node]["pos"] for node in node_ids]
+    positions = [[cand_graph.nodes[node]["x"], cand_graph.nodes[node]["y"]] for node in node_ids]
     return scipy.spatial.KDTree(positions)
 
 def add_cand_edges(
@@ -402,7 +404,7 @@ print(f"Our ground truth track graph has {gt_tracks.number_of_nodes()} nodes and
 #
 # A set of linear constraints ensures that the solution will be a feasible cell tracking graph. For example, if an edge is part of $\tilde{G}$, both its incident nodes have to be part of $\tilde{G}$ as well.
 #
-# `motile` ([docs here](https://funkelab.github.io/motile/)), makes it easy to link with an ILP in python by implementing commong linking constraints and costs. 
+# `motile` ([docs here](https://funkelab.github.io/motile/)), makes it easy to link with an ILP in python by implementing common linking constraints and costs. 
 #
 # TODO: delete this?
 
@@ -427,7 +429,7 @@ print(f"Our ground truth track graph has {gt_tracks.number_of_nodes()} nodes and
 #
 
 # %% tags=["task"]
-def solve_basic_optimization(graph):
+def solve_basic_optimization(cand_graph):
     """Set up and solve the network flow problem.
 
     Args:
@@ -436,9 +438,11 @@ def solve_basic_optimization(graph):
     Returns:
         nx.DiGraph: The networkx digraph with the selected solution tracks
     """
-    solver = motile.Solver(graph)
+
+    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
+    solver = motile.Solver(cand_trackgraph)
     ### YOUR CODE HERE ###
-    solution = solver.solve()
+    solver.solve()
     solution_graph = graph_to_nx(solver.get_selected_subgraph())
     return solution_graph
 
@@ -453,19 +457,18 @@ def solve_basic_optimization(cand_graph):
     Returns:
         nx.DiGraph: The networkx digraph with the selected solution tracks
     """
-
-    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="time")
+    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
     solver = motile.Solver(cand_trackgraph)
 
-    solver.add_costs(
-        motile.costs.EdgeDistance(weight=1, constant=-20, position_attribute="pos")
+    solver.add_cost(
+        motile.costs.EdgeDistance(weight=1, constant=-20, position_attribute=("x", "y"))
     )
-    solver.add_costs(motile.costs.Appear(constant=1.0))
+    solver.add_cost(motile.costs.Appear(constant=1.0))
 
-    solver.add_constraints(motile.constraints.MaxParents(1))
-    solver.add_constraints(motile.constraints.MaxChildren(2))
+    solver.add_constraint(motile.constraints.MaxParents(1))
+    solver.add_constraint(motile.constraints.MaxChildren(2))
 
-    solution = solver.solve()
+    solver.solve()
     solution_graph = graph_to_nx(solver.get_selected_subgraph())
     return solution_graph
 
@@ -474,7 +477,6 @@ def solve_basic_optimization(cand_graph):
 # Here is a utility function to gauge some statistics of a solution.
 
 # %%
-from motile_toolbox.candidate_graph import graph_to_nx
 def print_graph_stats(graph, name):
     print(f"{name}\t\t{graph.number_of_nodes()} nodes\t{graph.number_of_edges()} edges\t{len(list(nx.weakly_connected_components(graph)))} tracks")
 
@@ -491,13 +493,16 @@ def print_graph_stats(graph, name):
 
 # %%
 # run this cell to actually run the solving and get a solution
-solution_tracks = solve_basic_optimization(cand_graph)
+solution_graph = solve_basic_optimization(cand_graph)
 
 # then print some statistics about the solution compared to the ground truth
-print_graph_stats(solution_tracks, "solution")
+print_graph_stats(solution_graph, "solution")
 print_graph_stats(gt_tracks, "gt tracks")
 
 
+
+# %% [markdown]
+# If you haven't selected any nodes or edges in your solution, try adjusting your weight and/or constant values. Make sure you have some negative costs or selecting nothing will always be the best solution!
 
 # %% [markdown]
 # <div class="alert alert-block alert-warning"><h3>Question 1: Interpret your results based on statistics</h3>
@@ -518,8 +523,25 @@ print_graph_stats(gt_tracks, "gt tracks")
 
 # %%
 # Add a tracks layer
-tracks_layer = to_napari_tracks_layer(solution_graph, frame_key="time", location_key="pos", name="solution_tracks")
+tracks_layer = to_napari_tracks_layer(solution_graph, frame_key="t", location_key="pos", name="solution_tracks")
 viewer.add_layer(tracks_layer)
+
+
+# %%
+def filter_segmentation(
+    solution_nx_graph: nx.DiGraph,
+    segmentation: np.ndarray,
+) -> np.ndarray:
+    filtered_masks = np.zeros_like(segmentation)
+    for node in solution_nx_graph.nodes():
+        time_frame = solution_nx_graph.nodes[node]["t"]
+        seg_mask = (
+            segmentation[time_frame] == node
+        )
+        filtered_masks[time_frame][seg_mask] = node
+    return filtered_masks
+
+filtered_segmentation = filter_segmentation(solution_graph, segmentation)
 
 
 # %%
@@ -554,12 +576,13 @@ def relabel_segmentation(
         soln_copy.remove_edges_from(out_edges)
     for node_set in nx.weakly_connected_components(soln_copy):
         for node in node_set:
-            time_frame = solution_nx_graph.nodes[node]["time"]
+            time_frame = solution_nx_graph.nodes[node]["t"]
             previous_seg_id = node
             previous_seg_mask = (
                 segmentation[time_frame] == previous_seg_id
             )
             tracked_masks[time_frame][previous_seg_mask] = id_counter
+            solution_graph.nodes[node]["label"] = id_counter
         id_counter += 1
     return tracked_masks
 
@@ -576,21 +599,37 @@ viewer.add_labels(solution_seg, name="solution_seg")
 #
 
 # %% [markdown]
-# ## Checkpoint 2
-# <div class="alert alert-block alert-success"><h3>Checkpoint 2</h3>
-# We have set up and run a basic ILP to get tracks and visualized the output.  
-#
-# We will go over the code and discuss the answers to Questions 1 and 2 together soon. If you have extra time, think about what kinds of improvements you could make to the costs and constraints to fix the issues that you are seeing. You can even try tuning your weights and constants, or adding or removing motile Costs and Constraints, and seeing how that changes the output.
-# </div>
-
-# %% [markdown]
 # ## Evaluation Metrics
 #
 # We were able to understand via visualizing the predicted tracks on the images that the basic solution is far from perfect for this problem.
 #
 # Additionally, we would also like to quantify this. We will use the package [`traccuracy`](https://traccuracy.readthedocs.io/en/latest/) to calculate some [standard metrics for cell tracking](http://celltrackingchallenge.net/evaluation-methodology/). For example, a high-level indicator for tracking performance is called TRA.
 #
-# If you're interested in more detailed metrics, you can check out for example the false positive (FP) and false negative (FN) nodes, edges and division events.
+# If you're interested in more detailed metrics, you can look at the false positive (FP) and false negative (FN) nodes, edges and division events.
+
+
+# %%
+
+from skimage.draw import disk
+def make_gt_detections(data_shape, gt_tracks, radius):
+    segmentation = np.zeros(data_shape, dtype="uint32")
+    frame_shape = data_shape[1:]
+    # make frame with one cell in center with label 1
+    for node, data in gt_tracks.nodes(data=True):
+        pos = (data["x"], data["y"])
+        time = data["t"]
+        rr, cc = disk(center=pos, radius=radius, shape=frame_shape)
+        segmentation[time][rr, cc] = node
+    return segmentation
+
+gt_dets = make_gt_detections(data_root["raw"].shape, gt_tracks, 10)
+# viewer.add_image(gt_dets)
+
+
+# %%
+
+for node in gt_tracks.nodes:
+    gt_tracks.nodes[node]["label"] = node
 
 
 # %%
@@ -609,16 +648,16 @@ def get_metrics(gt_graph, labels, pred_graph, pred_segmentation):
 
     gt_graph = traccuracy.TrackingGraph(
         graph=gt_graph,
-        frame_key="time",
-        label_key="show",
+        frame_key="t",
+        label_key="label",
         location_keys=("x", "y"),
         segmentation=labels,
     )
 
     pred_graph = traccuracy.TrackingGraph(
         graph=pred_graph,
-        frame_key="time",
-        label_key="show",
+        frame_key="t",
+        label_key="label",
         location_keys=("x", "y"),
         segmentation=pred_segmentation,
     )
@@ -626,7 +665,7 @@ def get_metrics(gt_graph, labels, pred_graph, pred_segmentation):
     results = run_metrics(
         gt_data=gt_graph,
         pred_data=pred_graph,
-        matcher=CTCMatcher(),
+        matcher=IOUMatcher(iou_threshold=0.3, one_to_one=True),
         metrics=[CTCMetrics(), DivisionMetrics()],
     )
 
@@ -634,21 +673,79 @@ def get_metrics(gt_graph, labels, pred_graph, pred_segmentation):
 
 
 # %%
-get_metrics(gt_nx_graph, None, solution_graph, solution_seg)
+
+gt_graph = traccuracy.TrackingGraph(
+    graph=gt_tracks,
+    frame_key="t",
+    label_key="label",
+    location_keys=("x", "y"),
+    segmentation=gt_dets,
+)
+print(gt_dets.shape)
+pred_graph = traccuracy.TrackingGraph(
+    graph=solution_graph,
+    frame_key="t",
+    label_key="label",
+    location_keys=("x", "y"),
+    segmentation=solution_seg.astype(np.uint32),
+)
+print(solution_seg.astype(np.uint32).shape)
+print(isinstance(gt_graph, traccuracy.TrackingGraph))
+print(isinstance(pred_graph, traccuracy.TrackingGraph))
+
+matcher = IOUMatcher(iou_threshold=0.3, one_to_one=False)
+matched = matcher._compute_mapping(gt_graph, pred_graph)
+CTCMetrics().compute(matched).to_dict()
+
+# %%
+DivisionMetrics().compute(matched)
+
+# %%
+get_metrics(gt_tracks, gt_dets, solution_graph, solution_seg.astype(np.uint32))
 
 
 # %% [markdown]
-# ## Task 4 - Add an appear cost, but not at the boundary
-# The [Appear](https://funkelab.github.io/motile/api.html#motile.costs.Appear_) cost penalizes starting a new track, encouraging continuous tracks. However, you do not want to penalize tracks that appear in the first frame. In our case, we probably also do not want to penalize appearing at the "bottom" of the dataset. The built in Appear cost has an `ignore_attribute` argument, where if the node has that attribute and it evaluates to True, the Appear cost will not be paid for that node.
+# <div class="alert alert-block alert-warning"><h3>Question 3: Interpret your results based on metrics</h3>
+# <p>
+# What additional information, if any, do the metrics give you compared to the statistics and the visualization?
+# </p>
+# </div>
 #
-# <div class="alert alert-block alert-info"><h3>Task 4: Add an appear cost, but not at the boundary</h3>
-# <p> Add an attribute to the nodes of our candidate graph that is True if the appear cost should NOT be paid for that node, and False (or not present) otherwise. Then add an Appear cost to our motile pipeline using our new attribute as the `ignore_attribute` argument, and re-solve to see if performance improves.</p>
+
+# %% [markdown]
+# <div class="alert alert-block alert-success"><h2>Checkpoint 2</h2>
+# We have set up and run a basic ILP to get tracks and visualized and evaluated the output.  
+#
+# We will go over the code and discuss the answers to Questions 1, 2, and 3 together soon. If you have extra time, think about what kinds of improvements you could make to the costs and constraints to fix the issues that you are seeing. You can even try tuning your weights and constants, or adding or removing motile Costs and Constraints, and seeing how that changes the output.
 # </div>
 
-# %%
+# %% [markdown]
+# ## Customizing the Tracking Task
+#
+# There 3 main ways to encode prior knowledge about your task into the motile tracking pipeline.
+# 1. Add an attribute to the candidate graph and incorporate it with an existing cost
+# 2. Change the structure of the candidate graph
+# 3. Add a new type of cost or constraint
+#
+# The first way is the most common, and is quite flexible, so we will focus on two examples of this type of customization.
+
+# %% [markdown]
+# ## Task 4 - Add an appear cost, but not at the boundary
+# The Appear cost penalizes starting a new track, encouraging continuous tracks. However, you do not want to penalize tracks that appear in the first frame. In our case, we probably also do not want to penalize appearing at the "bottom" of the dataset. The built in Appear cost ([docs here](https://funkelab.github.io/motile/api.html#motile.costs.Appear_)) has an `ignore_attribute` argument, where if the node has that attribute and it evaluates to True, the Appear cost will not be paid for that node.
+
+# %% [markdown]
+#
+# <div class="alert alert-block alert-info"><h3>Task 4a: Add an ignore_appear attribute to the candidate graph </h3>
+# <p> 
+# For each node on our candidate graph, you should add an attribute `ignore_appear` that evaluates to True if the appear cost should NOT be paid for that node. For nodes that should pay the appear cost, you can either set the attribute to False, or not add the attribute. Nodes should NOT pay the appear cost if they are in the first time frame, or if they are within a certain distance to the "bottom" of the dataset. (You will need to determine the coordinate range that you consider the "bottom" of the dataset, perhaps by hovering over the napari image layer and seeing what the coordinate values are).
+# </p>
+# </div>
+
+# %% tags=["task"]
 def add_appear_ignore_attr(cand_graph):
-    ### YOUR CODE HERE ###
-    pass  # delete this
+    for node in cand_graph.nodes():
+        ### YOUR CODE HERE ###
+        pass  # delete this
 
 add_appear_ignore_attr(cand_graph)
 
@@ -656,8 +753,8 @@ add_appear_ignore_attr(cand_graph)
 # %% tags=["solution"]
 def add_appear_ignore_attr(cand_graph):
     for node in cand_graph.nodes():
-        time = cand_graph.nodes[node]["time"]
-        pos_x = cand_graph.nodes[node]["pos"][0]
+        time = cand_graph.nodes[node]["t"]
+        pos_x = cand_graph.nodes[node]["x"]
         if time == 0 or pos_x >= 710:
             cand_graph.nodes[node]["ignore_appear"] = True
 
@@ -665,73 +762,89 @@ add_appear_ignore_attr(cand_graph)
 cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="time")
 
 
-# %%
-def solve_appear_optimization(graph, edge_weight, edge_constant):
+# %% [markdown]
+# <div class="alert alert-block alert-info"><h3>Task 4b: Use the `ignore_appear` attribute in your solver pipeline </h3>
+# <p>Copy your solver pipeline from above, and then adapt the Appear cost to use our new `ignore_appear` attribute. You may also want to adapt the Appear constant value. Then re-solve to see if performance improves.
+# </p>
+# </div>
+
+# %% tags=["task"]
+def solve_appear_optimization(cand_graph):
     """Set up and solve the network flow problem.
 
     Args:
-        graph (motile.TrackGraph): The candidate graph.
-        edge_weight (float): The weighting factor of the edge selection cost.
-        edge_constant(float): The constant cost of selecting any edge.
+        graph (nx.DiGraph): The candidate graph.
 
     Returns:
-        motile.Solver: The solver object, ready to be inspected.
+        nx.DiGraph: The networkx digraph with the selected solution tracks
     """
-    solver = motile.Solver(graph)
 
-    solver.add_costs(
-        motile.costs.EdgeDistance(weight=edge_weight, constant=edge_constant, position_attribute="pos")
+    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
+    solver = motile.Solver(cand_trackgraph)
+
+    ### YOUR CODE HERE ###
+
+    solver.solve()
+    solution_graph = graph_to_nx(solver.get_selected_subgraph())
+    return solution_graph
+
+
+# %% tags=["solution"]
+def solve_appear_optimization(cand_graph):
+    """Set up and solve the network flow problem.
+
+    Args:
+        graph (nx.DiGraph): The candidate graph.
+
+    Returns:
+        nx.DiGraph: The networkx digraph with the selected solution tracks
+    """
+
+    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
+    solver = motile.Solver(cand_trackgraph)
+
+    solver.add_cost(
+        motile.costs.EdgeDistance(weight=1, constant=-20, position_attribute=("x", "y"))
     )
-    solver.add_costs(
-        motile.costs.Appear(constant=50, ignore_attribute="ignore_appear") 
-    )
+    solver.add_cost(motile.costs.Appear(constant=10, ignore_attribute="ignore_appear"))
 
-    solver.add_constraints(motile.constraints.MaxParents(1))
-    solver.add_constraints(motile.constraints.MaxChildren(2))
+    solver.add_constraint(motile.constraints.MaxParents(1))
+    solver.add_constraint(motile.constraints.MaxChildren(2))
 
-    solution = solver.solve()
+    solver.solve()
+    solution_graph = graph_to_nx(solver.get_selected_subgraph())
+    return solution_graph
 
-    return solver
-
-solver = solve_appear_optimization(cand_trackgraph, 1, -20)
-solution_graph = graph_to_nx(solver.get_selected_subgraph())
 
 # %%
+solution_graph = solve_appear_optimization(cand_graph)
+
+# %%
+
 tracks_layer = to_napari_tracks_layer(solution_graph, frame_key="time", location_key="pos", name="solution_appear_tracks")
 viewer.add_layer(tracks_layer)
+
+
+# %%
 solution_seg = relabel_segmentation(solution_graph, segmentation)
 viewer.add_labels(solution_seg, name="solution_appear_seg")
 
 # %%
-get_metrics(gt_tracks, None, solution_graph, solution_seg)
-
-# %% [markdown]
-# ## Checkpoint 3
-# <div class="alert alert-block alert-success"><h3>Checkpoint 3</h3>
-# We have run an ILP to get tracks, visualized the output, evaluated the results, and added an Appear cost that does not take effect at the boundary. If you reach this Checkpoint early, try adjusting your weights or using different combinations of built-in Costs and Constraints to get better results. Also consider custom Costs or Constraints that would help for this task!
-#
-# When most people have reached this checkpoint, we will go around and
-# share what worked and what did not, and discuss ideas for custom costs or constraints.
-# </div>
-
-# %% [markdown]
-# ## Customizing the Tracking Task
-#
-# There 3 main ways to encode prior knowledge about your task into the motile tracking pipeline.
-# 1. Add an attribute to the candidate graph and incorporate it with a Selection cost
-# 2. Change the structure of the candidate graph
-# 3. Add a new type of cost or constraint
+get_metrics(gt_tracks, gt_dets, solution_graph, solution_seg)
 
 # %% [markdown]
 # ## Task 5 - Incorporating Known Direction of Motion
 #
-# Motile has built in the EdgeDistance as an edge selection cost, which penalizes longer edges by computing the Euclidean distance between the endpoints. However, in our dataset we see a trend of upward motion in the cells, and the false detections at the top are not moving. If we penalize movement based on what we expect, rather than Euclidean distance, we can select more correct cells and penalize the non-moving artefacts at the same time.
+# So far, we have been using motile's EdgeDistance as an edge selection cost, which penalizes longer edges by computing the Euclidean distance between the endpoints. However, in our dataset we see a trend of upward motion in the cells, and the false detections at the top are not moving. If we penalize movement based on what we expect, rather than Euclidean distance, we can select more correct cells and penalize the non-moving artefacts at the same time.
 #  
-# <div class="alert alert-block alert-info"><h3>Task 5: Incorporating known direction of motion</h3>
-# <p> For this task, we need to determine the "expected" amount of motion, then add an attribute to our candidate edges that represents distance from the expected motion direction. Finally, we can incorporate that feature into the ILP via the EdgeSelection cost and see if it improves performance.</p>
+#
+
+# %% [markdown]
+# <div class="alert alert-block alert-info"><h3>Task 5a: Add a drift distance attribute</h3>
+# <p> For this task, we need to determine the "expected" amount of motion, then add an attribute to our candidate edges that represents distance from the expected motion direction.</p>
 # </div>
 
-# %%
+# %% tags=["task"]
 drift = ... ### YOUR CODE HERE ###
 
 def add_drift_dist_attr(cand_graph, drift):
@@ -743,64 +856,90 @@ def add_drift_dist_attr(cand_graph, drift):
         cand_graph.edges[edge]["drift_dist"] = drift_dist
 
 add_drift_dist_attr(cand_graph, drift)
-cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="time")
 
 # %% tags=["solution"]
-drift = np.array([-20, 0])
+drift = np.array([-10, 0])
 
 def add_drift_dist_attr(cand_graph, drift):
     for edge in cand_graph.edges():
         source, target = edge
-        source_pos = np.array(cand_graph.nodes[source]["pos"])
-        target_pos = np.array(cand_graph.nodes[target]["pos"])
+        source_data = cand_graph.nodes[source]
+        source_pos = np.array([source_data["x"], source_data["y"]])
+        target_data = cand_graph.nodes[target]
+        target_pos = np.array([target_data["x"], target_data["y"]])
         expected_target_pos = source_pos + drift
         drift_dist = np.linalg.norm(expected_target_pos - target_pos)
         cand_graph.edges[edge]["drift_dist"] = drift_dist
 
 add_drift_dist_attr(cand_graph, drift)
-cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="time")
 
+
+# %% [markdown]
+# <div class="alert alert-block alert-info"><h3>Task 5b: Add a drift distance attribute</h3>
+# <p> Now, we set up yet another solving pipeline. This time, we will replace our EdgeDistance
+# cost with an EdgeSelection cost using our new "drift_dist" attribute. The weight should be positive, since a higher distance from the expected drift should cost more, similar to our prior EdgeDistance cost. Also similarly, we need a negative constant to make sure that the overall cost of selecting tracks is negative.</p>
+# </div>
 
 # %%
-def solve_drift_optimization(graph, edge_weight, edge_constant):
+def solve_drift_optimization(cand_graph):
     """Set up and solve the network flow problem.
 
     Args:
-        graph (motile.TrackGraph): The candidate graph.
-        edge_weight (float): The weighting factor of the edge selection cost.
-        edge_constant(float): The constant cost of selecting any edge.
+        cand_graph (nx.DiGraph): The candidate graph.
 
     Returns:
-        motile.Solver: The solver object, ready to be inspected.
+        nx.DiGraph: The networkx digraph with the selected solution tracks
     """
-    solver = motile.Solver(graph)
+    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
+    solver = motile.Solver(cand_trackgraph)
 
-    solver.add_costs(
-        motile.costs.EdgeSelection(weight=edge_weight, constant=edge_constant, attribute="drift_dist")
+    ### YOUR CODE HERE ###
+
+    solver.solve()
+
+    solution_graph = graph_to_nx(solver.get_selected_subgraph())
+    return solution_graph
+
+solution_graph = solve_drift_optimization(cand_trackgraph, 1, -20)
+
+
+# %% tags=["solution"]
+def solve_drift_optimization(cand_graph):
+    """Set up and solve the network flow problem.
+
+    Args:
+        cand_graph (nx.DiGraph): The candidate graph.
+
+    Returns:
+        nx.DiGraph: The networkx digraph with the selected solution tracks
+    """
+
+    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
+    solver = motile.Solver(cand_trackgraph)
+
+    solver.add_cost(
+        motile.costs.EdgeSelection(weight=1.0, constant=-30, attribute="drift_dist")
     )
-    solver.add_costs(
-        motile.costs.Appear(constant=50, ignore_attribute="ignore_appear") 
-    )
+    solver.add_cost(motile.costs.Appear(constant=0, ignore_attribute="ignore_appear"))
 
-    solver.add_constraints(motile.constraints.MaxParents(1))
-    solver.add_constraints(motile.constraints.MaxChildren(2))
+    solver.add_constraint(motile.constraints.MaxParents(1))
+    solver.add_constraint(motile.constraints.MaxChildren(2))
 
-    solution = solver.solve()
+    solver.solve()
+    solution_graph = graph_to_nx(solver.get_selected_subgraph())
+    return solution_graph
 
-    return solver
-
-solver = solve_drift_optimization(cand_trackgraph, 1, -20)
-solution_graph = graph_to_nx(solver.get_selected_subgraph())
 
 # %%
-tracks_layer = to_napari_tracks_layer(solution_graph, frame_key="time", location_key="pos", name="solution_tracks_with_drift")
-viewer.add_layer(tracks_layer)
+solution_graph = solve_drift_optimization(cand_graph)
+# tracks_layer = to_napari_tracks_layer(solution_graph, frame_key="time", location_key="pos", name="solution_tracks_with_drift")
+# viewer.add_layer(tracks_layer)
 
 solution_seg = relabel_segmentation(solution_graph, segmentation)
 viewer.add_labels(solution_seg, name="solution_seg_with_drift")
 
 # %%
-get_metrics(gt_nx_graph, None, solution_graph, solution_seg)
+get_metrics(gt_tracks, gt_dets, solution_graph, solution_seg)
 
 # %% [markdown]
 # ## Checkpoint 4
@@ -813,3 +952,9 @@ get_metrics(gt_nx_graph, None, solution_graph, solution_seg)
 
 # %% [markdown]
 #
+
+# %%
+# get a ground truth track
+# match it to the candidate graph and annotate TP nodes and edges
+
+# find a negative node in napari 
