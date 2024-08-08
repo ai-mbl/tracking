@@ -26,6 +26,7 @@ pip install matplotlib
 pip install ipywidgets
 pip install nbformat
 pip install pandas
+pip install git+https://github.com/funkelab/motile_napari_plugin.git@track-viewer#egg=motile_plugin
 
 # Make environment discoverable by Jupyter
 pip install ipykernel
