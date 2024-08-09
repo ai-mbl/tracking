@@ -78,6 +78,7 @@ import motile
 import zarr
 from motile_toolbox.visualization import to_napari_tracks_layer
 from motile_toolbox.candidate_graph import graph_to_nx
+from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 import motile_plugin.widgets as plugin_widgets
 from motile_plugin.backend.motile_run import MotileRun
 from napari.layers import Tracks
@@ -194,12 +195,23 @@ for node, data in gt_tracks.nodes(data=True):
 print("Your graph passed all the tests!")
 
 # %% [markdown]
-# We can also use the helper function `to_napari_tracks_layer` to visualize the ground truth tracks in our napari viewer.
+# Here we set up a napari widget for visualizing the tracking results. This is part of the motile napari plugin, not part of core napari.
+# If you get a napari error that the viewer window is closed, please re-run the previous visualization cell to re-open the viewer window.
 
 # %%
-
 widget = plugin_widgets.TreeWidget(viewer)
 viewer.window.add_dock_widget(widget, name="Lineage View", area="bottom")
+
+# %% [markdown]
+# Here we add a "MotileRun" to the napari tracking visualization widget (the "view_controller"). A MotileRun includes a name, a set of tracks, and a segmentation. The tracking visualization widget will add:
+# - a Points layer with the points in the tracks
+# - a Tracks layer to display the track history as a "tail" behind the point in the current time frame
+# - a Labels layer, if a segmentation was provided
+# - a Lineage View widget, which displays an abstract graph representation of all the solution tracks
+#
+# These views are synchronized such that every element is colored by the track ID of the element. Clicking on a node in the Lineage View will navigate to that cell in the data, and vice versa.
+#
+# Hint - if your screen is too small, you can "pop out" the lineage tree view into a separate window using the icon that looks like two boxes in the top left of the lineage tree view. You can also close the tree view with the x just above it, and open it again from the menu bar: Plugins -> Motile -> Lineage View (then re-run the below cell to add the data to the lineage view).
 
 # %%
 ground_truth_run = MotileRun(
@@ -516,38 +528,35 @@ print_graph_stats(gt_tracks, "gt tracks")
 # </div>
 
 # %% [markdown]
+# <div class="alert alert-block alert-success"><h3>Checkpoint 2</h3>
+# We will discuss the exercise up to this point as a group shortly. If you reach this checkpoint early, you can go on to Checkpoint 3.
+# </div>
+
+# %% [markdown]
 # ## Visualize the Result
 # Rather than just looking at printed statistics about our solution, let's visualize it in `napari`.
 #
-# This involves two steps:
-# 1. First, we can add a tracks layer with the solution graph.
-# 2. Second, we can add another segmentation layer, where the segmentations are relabeled so that the same cell will be the same color over time. Cells will still change color at division.
+# Before we can create our MotileRun, we need to create an output segmentation from our solution. Our output segmentation differs from our input segmentation in two main ways:
+# 1. Not all candidate nodes will be selected in our solution graph. We need to filter the masks corresponding to the un-selected candidate detections out of the output segmentation. 
+# 2. Segmentations will be relabeled so that the same cell will be the same label (and thus color) over time. Cells will still change label/color at division.
 #
 # Note that bad tracking results at this point does not mean that you implemented anything wrong! We still need to customize our costs and constraints to the task before we can get good results. As long as your pipeline selects something, and you can kind of interepret why it is going wrong, that is all that is needed at this point.
 
 # %%
-# recolor the segmentation
-
-from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 def relabel_segmentation(
     solution_nx_graph: nx.DiGraph,
     segmentation: np.ndarray,
 ) -> np.ndarray:
-    """Relabel a segmentation based on tracking results so that nodes in same
-    track share the same id. IDs do change at division.
+    """Relabel a segmentation based on tracking results to get the output segmentation.
 
     Args:
         solution_nx_graph (nx.DiGraph): Networkx graph with the solution to use
-            for relabeling. Nodes not in graph will be removed from seg. Original
-            segmentation ids and hypothesis ids have to be stored in the graph so we
-            can map them back.
-        segmentation (np.ndarray): Original (potentially multi-hypothesis)
-            segmentation with dimensions (t,h,[z],y,x), where h is 1 for single
-            input segmentation.
+            for relabeling. Nodes not in graph will be removed from seg.
+        segmentation (np.ndarray): Original segmentation with dimensions (t,y,x)
 
     Returns:
         np.ndarray: Relabeled segmentation array where nodes in same track share same
-            id with shape (t,1,[z],y,x)
+            id with shape (t,y,x)
     """
     assign_tracklet_ids(solution_nx_graph)
     tracked_masks = np.zeros_like(segmentation)
@@ -565,7 +574,7 @@ solution_seg = relabel_segmentation(solution_graph, segmentation)
 
 # %%
 basic_run = MotileRun(
-    run_name="basic_solution_test",
+    run_name="basic_solution",
     tracks=solution_graph,
     output_segmentation=np.expand_dims(solution_seg, axis=1)  # need to add a dummy dimension to fit API
 )
@@ -588,10 +597,14 @@ widget.view_controller.update_napari_layers(basic_run, time_attr="t", pos_attr=(
 # Additionally, we would also like to quantify this. We will use the package [`traccuracy`](https://traccuracy.readthedocs.io/en/latest/) to calculate some [standard metrics for cell tracking](http://celltrackingchallenge.net/evaluation-methodology/). For example, a high-level indicator for tracking performance is called TRA.
 #
 # If you're interested in more detailed metrics, you can look at the false positive (FP) and false negative (FN) nodes, edges and division events.
+#
+# TODO: explain this better. Pick a few important metrics (TRA, FP Nodes/edges/divs, FN nodes/edges/divs, TP divs) and explain them. Also, make a table of those specific results that we can add "runs" to so we can compare results across runs without scrolling up and down.
 
+
+# %% [markdown]
+# The metrics we want to compute require a ground truth segmentation. Since we do not have a ground truth segmentation, we can make one by drawing a circle around each ground truth detection. While not perfect, it will be good enough to match ground truth to predicted detections in order to compute metrics.
 
 # %%
-
 from skimage.draw import disk
 def make_gt_detections(data_shape, gt_tracks, radius):
     segmentation = np.zeros(data_shape, dtype="uint32")
@@ -606,7 +619,6 @@ def make_gt_detections(data_shape, gt_tracks, radius):
     return segmentation
 
 gt_dets = make_gt_detections(data_root["raw"].shape, gt_tracks, 10)
-# viewer.add_image(gt_dets)
 
 
 # %%
@@ -652,7 +664,6 @@ def get_metrics(gt_graph, labels, pred_graph, pred_segmentation):
 # %%
 get_metrics(gt_tracks, gt_dets, solution_graph, solution_seg.astype(np.uint32))
 
-
 # %% [markdown]
 # <div class="alert alert-block alert-warning"><h3>Question 3: Interpret your results based on metrics</h3>
 # <p>
@@ -662,10 +673,8 @@ get_metrics(gt_tracks, gt_dets, solution_graph, solution_seg.astype(np.uint32))
 #
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint 2</h2>
-# We have set up and run a basic ILP to get tracks and visualized and evaluated the output.  
-#
-# We will go over the code and discuss the answers to Questions 1, 2, and 3 together soon. If you have extra time, think about what kinds of improvements you could make to the costs and constraints to fix the issues that you are seeing. You can even try tuning your weights and constants, or adding or removing motile Costs and Constraints, and seeing how that changes the output.
+# <div class="alert alert-block alert-success"><h2>Checkpoint 3</h2>
+# If you reach this checkpoint with extra time, think about what kinds of improvements you could make to the costs and constraints to fix the issues that you are seeing. You can try tuning your weights and constants, or adding or removing motile Costs and Constraints, and seeing how that changes the output. See how good you can make the results!
 # </div>
 
 # %% [markdown]
@@ -676,120 +685,17 @@ get_metrics(gt_tracks, gt_dets, solution_graph, solution_seg.astype(np.uint32))
 # 2. Change the structure of the candidate graph
 # 3. Add a new type of cost or constraint
 #
-# The first way is the most common, and is quite flexible, so we will focus on two examples of this type of customization.
+# The first way is the most common, and is quite flexible, so we will focus on an example of this type of customization.
 
 # %% [markdown]
-# ## Task 4 - Add an appear cost, but not at the boundary
-# The Appear cost penalizes starting a new track, encouraging continuous tracks. However, you do not want to penalize tracks that appear in the first frame. In our case, we probably also do not want to penalize appearing at the "bottom" of the dataset. The built in Appear cost ([docs here](https://funkelab.github.io/motile/api.html#motile.costs.Appear_)) has an `ignore_attribute` argument, where if the node has that attribute and it evaluates to True, the Appear cost will not be paid for that node.
-
-# %% [markdown]
-#
-# <div class="alert alert-block alert-info"><h3>Task 4a: Add an ignore_appear attribute to the candidate graph </h3>
-# <p> 
-# For each node on our candidate graph, you should add an attribute `ignore_appear` that evaluates to True if the appear cost should NOT be paid for that node. For nodes that should pay the appear cost, you can either set the attribute to False, or not add the attribute. Nodes should NOT pay the appear cost if they are in the first time frame, or if they are within a certain distance to the "bottom" of the dataset. (You will need to determine the coordinate range that you consider the "bottom" of the dataset, perhaps by hovering over the napari image layer and seeing what the coordinate values are).
-# </p>
-# </div>
-
-# %% tags=["task"]
-def add_appear_ignore_attr(cand_graph):
-    for node in cand_graph.nodes():
-        ### YOUR CODE HERE ###
-        pass  # delete this
-
-add_appear_ignore_attr(cand_graph)
-
-
-# %% tags=["solution"]
-def add_appear_ignore_attr(cand_graph):
-    for node in cand_graph.nodes():
-        time = cand_graph.nodes[node]["t"]
-        pos_x = cand_graph.nodes[node]["x"]
-        if time == 0 or pos_x >= 710:
-            cand_graph.nodes[node]["ignore_appear"] = True
-
-add_appear_ignore_attr(cand_graph)
-
-
-# %% [markdown]
-# <div class="alert alert-block alert-info"><h3>Task 4b: Use the `ignore_appear` attribute in your solver pipeline </h3>
-# <p>Copy your solver pipeline from above, and then adapt the Appear cost to use our new `ignore_appear` attribute. You may also want to adapt the Appear constant value. Then re-solve to see if performance improves.
-# </p>
-# </div>
-
-# %% tags=["task"]
-def solve_appear_optimization(cand_graph):
-    """Set up and solve the network flow problem.
-
-    Args:
-        graph (nx.DiGraph): The candidate graph.
-
-    Returns:
-        nx.DiGraph: The networkx digraph with the selected solution tracks
-    """
-
-    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
-    solver = motile.Solver(cand_trackgraph)
-
-    ### YOUR CODE HERE ###
-
-    solver.solve()
-    solution_graph = graph_to_nx(solver.get_selected_subgraph())
-    return solution_graph
-
-
-# %% tags=["solution"]
-def solve_appear_optimization(cand_graph):
-    """Set up and solve the network flow problem.
-
-    Args:
-        graph (nx.DiGraph): The candidate graph.
-
-    Returns:
-        nx.DiGraph: The networkx digraph with the selected solution tracks
-    """
-
-    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
-    solver = motile.Solver(cand_trackgraph)
-
-    solver.add_cost(
-        motile.costs.EdgeDistance(weight=1, constant=-20, position_attribute=("x", "y"))
-    )
-    solver.add_cost(motile.costs.Appear(constant=10, ignore_attribute="ignore_appear"))
-
-    solver.add_constraint(motile.constraints.MaxParents(1))
-    solver.add_constraint(motile.constraints.MaxChildren(2))
-
-    solver.solve()
-    solution_graph = graph_to_nx(solver.get_selected_subgraph())
-    return solution_graph
-
-
-# %%
-solution_graph = solve_appear_optimization(cand_graph)
-solution_seg = relabel_segmentation(solution_graph, segmentation)
-
-# %%
-appear_run = MotileRun(
-    run_name="appear_solution",
-    tracks=solution_graph,
-    output_segmentation=np.expand_dims(solution_seg, axis=1)  # need to add a dummy dimension to fit API
-)
-
-widget.view_controller.update_napari_layers(appear_run, time_attr="t", pos_attr=("x", "y"))
-
-
-# %%
-get_metrics(gt_tracks, gt_dets, solution_graph, solution_seg)
-
-# %% [markdown]
-# ## Task 5 - Incorporating Known Direction of Motion
+# ## Task 4 - Incorporating Known Direction of Motion
 #
 # So far, we have been using motile's EdgeDistance as an edge selection cost, which penalizes longer edges by computing the Euclidean distance between the endpoints. However, in our dataset we see a trend of upward motion in the cells, and the false detections at the top are not moving. If we penalize movement based on what we expect, rather than Euclidean distance, we can select more correct cells and penalize the non-moving artefacts at the same time.
 #  
 #
 
 # %% [markdown]
-# <div class="alert alert-block alert-info"><h3>Task 5a: Add a drift distance attribute</h3>
+# <div class="alert alert-block alert-info"><h3>Task 4a: Add a drift distance attribute</h3>
 # <p> For this task, we need to determine the "expected" amount of motion, then add an attribute to our candidate edges that represents distance from the expected motion direction.</p>
 # </div>
 
@@ -824,7 +730,7 @@ add_drift_dist_attr(cand_graph, drift)
 
 
 # %% [markdown]
-# <div class="alert alert-block alert-info"><h3>Task 5b: Add a drift distance attribute</h3>
+# <div class="alert alert-block alert-info"><h3>Task 4b: Add a drift distance attribute</h3>
 # <p> Now, we set up yet another solving pipeline. This time, we will replace our EdgeDistance
 # cost with an EdgeSelection cost using our new "drift_dist" attribute. The weight should be positive, since a higher distance from the expected drift should cost more, similar to our prior EdgeDistance cost. Also similarly, we need a negative constant to make sure that the overall cost of selecting tracks is negative.</p>
 # </div>
@@ -869,8 +775,6 @@ def solve_drift_optimization(cand_graph):
     solver.add_cost(
         motile.costs.EdgeSelection(weight=1.0, constant=-30, attribute="drift_dist")
     )
-    solver.add_cost(motile.costs.Appear(constant=100, ignore_attribute="ignore_appear"))
-    solver.add_cost(motile.costs.Split(constant=20))
 
     solver.add_constraint(motile.constraints.MaxParents(1))
     solver.add_constraint(motile.constraints.MaxChildren(2))
@@ -898,7 +802,6 @@ get_metrics(gt_tracks, gt_dets, solution_graph, solution_seg)
 
 
 # %% [markdown]
-# ## Checkpoint 4
 # <div class="alert alert-block alert-success"><h3>Checkpoint 4</h3>
 # That is the end of the main exercise! If you have extra time, feel free to go onto the below bonus exercise to see how to learn the weights of your costs instead of setting them manually.
 # </div>
@@ -907,7 +810,9 @@ get_metrics(gt_tracks, gt_dets, solution_graph, solution_seg)
 # ## Bonus: Learning the Weights
 
 # %% [markdown]
+# Motile also provides the option to learn the best weights and constants using a (Structured Support Vector Machine)[https://en.wikipedia.org/wiki/Structured_support_vector_machine]. There is a tutorial on the motile documentation (here)[https://funkelab.github.io/motile/learning.html], but we will also walk you through an example below.
 #
+# We need some ground truth annotations on our candidate graph in order to learn the best weights. The next cell contains a function that matches our ground truth graph to our candidate graph using the predicted segmentations. The function checks for each ground truth node if it is inside one of our predicted segmentations. If it is, that candidate node is marked with attribute "gt" = True. Any unmatched candidate nodes have "gt" = False. We also annotate the edges in a similar fashion - if both endpoints of a GT edge are inside predicted segmentations, the corresponding candidate edge will have "gt" = True, while all other edges going out of that candidate node have "gt" = False.
 
 # %%
 def get_cand_id(gt_node, gt_track, cand_segmentation):
@@ -933,6 +838,9 @@ def add_gt_annotations(gt_tracks, cand_graph, segmentation):
            cand_graph.nodes[node]["gt"] = False
 
 
+# %% [markdown]
+# The SSVM does not need dense ground truth - providing only some annotations frequently is sufficient to learn good weights, and is efficient for both computation time and annotation time. Below, we create a validation graph that spans the first three time frames, and annotate it with our ground truth.
+
 # %%
 validation_times = [0, 3]
 validation_nodes = [node for node, data in cand_graph.nodes(data=True) 
@@ -941,6 +849,9 @@ print(len(validation_nodes))
 validation_graph = cand_graph.subgraph(validation_nodes).copy()
 add_gt_annotations(gt_tracks, validation_graph, segmentation)
 
+
+# %% [markdown]
+# Here we print the number of nodes and edges that have been annotated with True and False ground truth. It is important to provide negative/False annotations, as well as positive/True annotations, or the SSVM will try and select weights to pick everything.
 
 # %%
 gt_pos_nodes = [node_id for node_id, data in validation_graph.nodes(data=True) if "gt" in data and data["gt"] is True]
@@ -951,11 +862,23 @@ gt_neg_edges = [(source, target) for source, target, data in validation_graph.ed
 print(f"{len(gt_pos_nodes) + len(gt_neg_nodes)} annotated: {len(gt_pos_nodes)} True, {len(gt_neg_nodes)} False")
 print(f"{len(gt_pos_edges) + len(gt_neg_edges)} annotated: {len(gt_pos_edges)} True, {len(gt_neg_edges)} False")
 
+
+# %% [markdown]
+# <div class="alert alert-block alert-info"><h3>Bonus task: Add your best solver parameters</h3>
+# <p>Now, similar to before, we make the solver by adding costs and constraints. You can copy your best set of costs and constraints from before. It does not matter what weights and constants you choose. However, this time we just return the solver, rather than actually solving.</p>
+# </div>
+
+# %% tags=["task"]
+def get_ssvm_solver(cand_graph):
+
+    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
+    solver = motile.Solver(cand_trackgraph)
+
+    ### YOUR CODE HERE ###
+    return solver
+
+
 # %%
-import logging
-
-logging.basicConfig(level=logging.INFO)
-
 def get_ssvm_solver(cand_graph):
 
     cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
@@ -964,7 +887,6 @@ def get_ssvm_solver(cand_graph):
     solver.add_cost(
         motile.costs.EdgeSelection(weight=1.0, constant=-30, attribute="drift_dist")
     )
-    solver.add_cost(motile.costs.Appear(constant=20, ignore_attribute="ignore_appear"))
     solver.add_cost(motile.costs.Split(constant=20))
 
     solver.add_constraint(motile.constraints.MaxParents(1))
@@ -972,12 +894,20 @@ def get_ssvm_solver(cand_graph):
     return solver
 
 
+# %% [markdown]
+# To fit the best weights, the solver will solve the ILP many times and slowly converge to the best set of weights in a structured manner. Running the cell below may take some time - we recommend getting a Gurobi license if you want to use this technique in your research, as it speeds up solving quite a bit.
+#
+# At the end, it will print the optimal weights, and you can compare them to the weights you found by trial and error.
+
 # %%
 ssvm_solver = get_ssvm_solver(validation_graph)
 ssvm_solver.fit_weights(gt_attribute="gt", regularizer_weight=100, max_iterations=50)
 optimal_weights = ssvm_solver.weights
 optimal_weights
 
+
+# %% [markdown]
+# After we have our optimal weights, we need to solve with them on the full candidate graph.
 
 # %%
 def get_ssvm_solution(cand_graph, solver_weights):
@@ -989,6 +919,9 @@ def get_ssvm_solution(cand_graph, solver_weights):
 
 solution_graph = get_ssvm_solution(cand_graph, optimal_weights)
     
+
+# %% [markdown]
+# Finally, we can visualize and compute metrics on the solution found using the weights discovered by the SSVM.
 
 # %%
 solution_seg = relabel_segmentation(solution_graph, segmentation)
@@ -1003,6 +936,10 @@ ssvm_run = MotileRun(
 
 widget.view_controller.update_napari_layers(ssvm_run, time_attr="t", pos_attr=("x", "y"))
 
-# %%
-
-# %%
+# %% [markdown]
+# <div class="alert alert-block alert-warning"><h3>Bonus Question: Interpret SSVM results</h3>
+# <p>
+# How do the results compare between the SSVM-discovered weights and your hand-crafted weights? What are the advantages and disadvantages of each approach in terms of (human or computer) time needed?
+# </p>
+# </div>
+#
