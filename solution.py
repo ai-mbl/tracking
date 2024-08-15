@@ -57,12 +57,6 @@
 # ## Import packages
 
 # %%
-# %load_ext autoreload
-# %autoreload 2
-# TODO: remove
-import motile
-
-# %%
 import time
 from pathlib import Path
 
@@ -620,8 +614,9 @@ def make_gt_detections(data_shape, gt_tracks, radius):
 
 gt_dets = make_gt_detections(data_root["raw"].shape, gt_tracks, 10)
 
-
 # %%
+import pandas as pd
+
 def get_metrics(gt_graph, labels, run, results_df):
     """Calculate metrics for linked tracks by comparing to ground truth.
 
@@ -656,7 +651,7 @@ def get_metrics(gt_graph, labels, run, results_df):
         matcher=IOUMatcher(iou_threshold=0.3, one_to_one=True),
         metrics=[CTCMetrics(), DivisionMetrics()],
     )
-
+    columns = ["fp_nodes", "fn_nodes", "fp_edges", "fn_edges", "TRA", "True Positive Divisions", "False Positive Divisions", "False Negative Divisions"]
     results_filtered = {}
     results_filtered.update(results[0]["results"])
     results_filtered.update(results[1]["results"]["Frame Buffer 0"])
@@ -931,7 +926,7 @@ def get_ssvm_solution(cand_graph, solver_weights):
     return solution_graph
 
 solution_graph = get_ssvm_solution(cand_graph, optimal_weights)
-    
+
 
 # %% [markdown]
 # Finally, we can visualize and compute metrics on the solution found using the weights discovered by the SSVM.
