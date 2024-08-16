@@ -14,19 +14,15 @@ conda create -y -n 09-tracking python=3.11
 # Activate environment
 conda activate 09-tracking
 
-# Install dependencies
-conda install -y -c conda-forge -c gurobi -c funkelab ilpy
-pip install numpy
-pip install "motile>=0.3"
-pip install "traccuracy>=0.1.1"
-pip install git+https://github.com/funkelab/motile_napari_plugin.git@track-viewer#egg=motile_plugin
-pip install matplotlib
-pip install ipywidgets
-pip install nbformat
-pip install pandas
-
-# Make environment discoverable by Jupyter
-pip install ipykernel
+# Install additional requirements
+if [[ "$CONDA_DEFAULT_ENV" == "09-tracking" ]]; then
+    echo "Environment activated successfully for package installs"
+    conda install -y -c conda-forge -c gurobi -c funkelab ilpy
+    pip install numpy "motile>=0.3" "traccuracy>=0.1.1" git+https://github.com/funkelab/motile_napari_plugin.git@track-viewer#egg=motile_plugin matplotlib ipywidgets nbformat pandas ipykernel
+    python -m ipykernel install --user --name "09-tracking"
+else
+    echo "Failed to activate environment for package installs. Dependencies not installed!"
+fi
 
 conda deactivate
 
