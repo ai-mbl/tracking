@@ -145,7 +145,12 @@ viewer.add_image(probabilities, name="probs", scale=(1, 2, 2))
 #
 
 # %% tags=["task"]
-gt_tracks = ... ##### Your code here ####
+def read_gt_tracks():
+    gt_tracks = nx.DiGraph()
+    ### YOUR CODE HERE ###
+    return gt_tracks
+
+gt_tracks = read_gt_tracks()
 
 
 # %% tags=["solution"]
@@ -247,9 +252,13 @@ def nodes_from_segmentation(segmentation: np.ndarray) -> nx.DiGraph:
     Returns:
         nx.DiGraph: A candidate graph with only nodes.
     """
-    cand_graph = ...
-
-    #### Your code here #####
+    cand_graph = nx.DiGraph()
+    print("Extracting nodes from segmentation")
+    for t in tqdm(range(len(segmentation))):
+        seg_frame = segmentation[t]
+        props = skimage.measure.regionprops(seg_frame)
+        for regionprop in props:
+            ### YOUR CODE HERE ###
 
     return cand_graph
 
@@ -438,9 +447,11 @@ def solve_basic_optimization(cand_graph):
     Returns:
         nx.DiGraph: The networkx digraph with the selected solution tracks
     """
-    solution_graph = ...
-
-    #### Your code here ####
+    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
+    solver = motile.Solver(cand_trackgraph)
+    ### YOUR CODE HERE ###
+    solver.solve()
+    solution_graph = graph_to_nx(solver.get_selected_subgraph())
 
     return solution_graph
 
@@ -696,20 +707,14 @@ results_df
 # </div>
 
 # %% tags=["task"]
-drift = np.array([
-    -10, # Expected movement in y
-    0 # Expected movement in x
-])
+drift = ... ### YOUR CODE HERE ###
 
 def add_drift_dist_attr(cand_graph, drift):
     for edge in cand_graph.edges():
-        source, target = edge
-        source_data = cand_graph.nodes[source]
-        source_pos = np.array([source_data["x"], source_data["y"]])
-        target_data = cand_graph.nodes[target]
-        target_pos = np.array([target_data["x"], target_data["y"]])
-
-        drift_dist = ... # Calculate the distance between the expected position after drift and the actual target position
+        ### YOUR CODE HERE ###
+        # get the location of the endpoints of the edge
+        # then compute the distance between the expected movement and the actual movement
+        # and save it in the "drift_dist" attribute (below)
         cand_graph.edges[edge]["drift_dist"] = drift_dist
 
 add_drift_dist_attr(cand_graph, drift)
