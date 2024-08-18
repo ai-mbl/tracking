@@ -8,7 +8,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.11.2
+#       jupytext_version: 1.15.0
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -29,14 +29,14 @@
 # - **`motile`**: To set up and solve an Integer Linear Program (ILP) for tracking.
 #     ILP-based methods frame tracking as a constrained optimization problem. The task is to select a subset of nodes/edges from a "candidate graph" of all possible nodes/edges. The subset must minimize user-defined costs (e.g. edge distance), while also satisfying a set of tracking constraints (e.g. each cell is linked to at most one cell in the previous frame). Note: this tracking approach is not inherently using
 #     "deep learning" - the costs and constraints are usually hand-crafted to encode biological and data-based priors, although cost features can also be learned from data.
-# - **`napari`**: To visualize tracking inputs and outputs. Qualitative analysis is crucial for tuning the 
+# - **`napari`**: To visualize tracking inputs and outputs. Qualitative analysis is crucial for tuning the
 #     weights of the objective function and identifying data-specific costs and constraints.
 # - **`traccuracy`**: To evaluate tracking results. Metrics such as accuracy can be misleading for tracking,
 #     because rare events such as divisions are much harder than the common linking tasks, and might
 #     be more biologically relevant for downstream analysis. Therefore, it is important to evaluate on
 #     a wide range of error metrics and determine which are most important for your use case.
 #
-# After running through the full tracking pipeline, from loading to evaluation, we will learn how to **incorporate custom costs** based on dataset-specific prior information. As a bonus exercise, 
+# After running through the full tracking pipeline, from loading to evaluation, we will learn how to **incorporate custom costs** based on dataset-specific prior information. As a bonus exercise,
 # you can learn how to **learn the best cost weights** for a task from
 # from a small amount of ground truth tracking information.
 #
@@ -111,7 +111,6 @@ viewer.add_image(image_data, name="raw")
 viewer.add_labels(segmentation, name="seg")
 viewer.add_image(probabilities, name="probs", scale=(1, 2, 2))
 
-
 # %% [markdown]
 # ## Read in the ground truth graph
 #
@@ -146,12 +145,7 @@ viewer.add_image(probabilities, name="probs", scale=(1, 2, 2))
 #
 
 # %% tags=["task"]
-def read_gt_tracks():
-    gt_tracks = nx.DiGraph()
-    ### YOUR CODE HERE ###
-    return gt_tracks
-
-gt_tracks = read_gt_tracks()
+gt_tracks = ... ##### Your code here ####
 
 
 # %% tags=["solution"]
@@ -228,7 +222,7 @@ widget.view_controller.update_napari_layers(ground_truth_run, time_attr="t", pos
 
 # %% [markdown]
 # <div class="alert alert-block alert-info"><h3>Task 2: Extract candidate nodes from the predicted segmentations</h3>
-# First we need to turn each segmentation into a node in a `networkx.DiGraph`. 
+# First we need to turn each segmentation into a node in a `networkx.DiGraph`.
 # Use <a href=https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.regionprops>skimage.measure.regionprops</a> to extract properties from each segmentation, and create a candidate graph with nodes only.
 #
 #
@@ -244,7 +238,7 @@ widget.view_controller.update_napari_layers(ground_truth_run, time_attr="t", pos
 
 # %% tags=["task"]
 def nodes_from_segmentation(segmentation: np.ndarray) -> nx.DiGraph:
-    """Extract candidate nodes from a segmentation. 
+    """Extract candidate nodes from a segmentation.
 
     Args:
         segmentation (np.ndarray): A numpy array with integer labels and dimensions
@@ -253,14 +247,10 @@ def nodes_from_segmentation(segmentation: np.ndarray) -> nx.DiGraph:
     Returns:
         nx.DiGraph: A candidate graph with only nodes.
     """
-    cand_graph = nx.DiGraph()
-    print("Extracting nodes from segmentation")
-    for t in tqdm(range(len(segmentation))):
-        seg_frame = segmentation[t]
-        props = skimage.measure.regionprops(seg_frame)
-        for regionprop in props:
-            ### YOUR CODE HERE ###
-        
+    cand_graph = ...
+
+    #### Your code here #####
+
     return cand_graph
 
 cand_graph = nodes_from_segmentation(segmentation)
@@ -268,7 +258,7 @@ cand_graph = nodes_from_segmentation(segmentation)
 
 # %% tags=["solution"]
 def nodes_from_segmentation(segmentation: np.ndarray) -> nx.DiGraph:
-    """Extract candidate nodes from a segmentation. 
+    """Extract candidate nodes from a segmentation.
 
     Args:
         segmentation (np.ndarray): A numpy array with integer labels and dimensions
@@ -414,14 +404,14 @@ print(f"Our ground truth track graph has {gt_tracks.number_of_nodes()} nodes and
 #
 # A set of linear constraints ensures that the solution will be a feasible cell tracking graph. For example, if an edge is part of $\tilde{G}$, both its incident nodes have to be part of $\tilde{G}$ as well.
 #
-# `motile` ([docs here](https://funkelab.github.io/motile/)), makes it easy to link with an ILP in python by implementing common linking constraints and costs. 
+# `motile` ([docs here](https://funkelab.github.io/motile/)), makes it easy to link with an ILP in python by implementing common linking constraints and costs.
 #
 # TODO: delete this?
 
 # %% [markdown]
 # ## Task 3 - Basic tracking with motile
 # <div class="alert alert-block alert-info"><h3>Task 3: Set up a basic motile tracking pipeline</h3>
-# <p>Use the motile <a href=https://funkelab.github.io/motile/quickstart.html#sec-quickstart>quickstart</a> example to set up a basic motile pipeline for our task. 
+# <p>Use the motile <a href=https://funkelab.github.io/motile/quickstart.html#sec-quickstart>quickstart</a> example to set up a basic motile pipeline for our task.
 #
 # Here are some key similarities and differences between the quickstart and our task:
 # <ul>
@@ -443,17 +433,15 @@ def solve_basic_optimization(cand_graph):
     """Set up and solve the network flow problem.
 
     Args:
-        graph (motile.TrackGraph): The candidate graph.
+        graph (nx.DiGraph): The candidate graph.
 
     Returns:
         nx.DiGraph: The networkx digraph with the selected solution tracks
     """
+    solution_graph = ...
 
-    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
-    solver = motile.Solver(cand_trackgraph)
-    ### YOUR CODE HERE ###
-    solver.solve()
-    solution_graph = graph_to_nx(solver.get_selected_subgraph())
+    #### Your code here ####
+
     return solution_graph
 
 
@@ -531,7 +519,7 @@ print_graph_stats(gt_tracks, "gt tracks")
 # Rather than just looking at printed statistics about our solution, let's visualize it in `napari`.
 #
 # Before we can create our MotileRun, we need to create an output segmentation from our solution. Our output segmentation differs from our input segmentation in two main ways:
-# 1. Not all candidate nodes will be selected in our solution graph. We need to filter the masks corresponding to the un-selected candidate detections out of the output segmentation. 
+# 1. Not all candidate nodes will be selected in our solution graph. We need to filter the masks corresponding to the un-selected candidate detections out of the output segmentation.
 # 2. Segmentations will be relabeled so that the same cell will be the same label (and thus color) over time. Cells will still change label/color at division.
 #
 # Note that bad tracking results at this point does not mean that you implemented anything wrong! We still need to customize our costs and constraints to the task before we can get good results. As long as your pipeline selects something, and you can kind of interepret why it is going wrong, that is all that is needed at this point.
@@ -588,11 +576,12 @@ widget.view_controller.update_napari_layers(basic_run, time_attr="t", pos_attr=(
 #
 # We were able to understand via visualizing the predicted tracks on the images that the basic solution is far from perfect for this problem.
 #
-# Additionally, we would also like to quantify this. We will use the package [`traccuracy`](https://traccuracy.readthedocs.io/en/latest/) to calculate some [standard metrics for cell tracking](http://celltrackingchallenge.net/evaluation-methodology/). For example, a high-level indicator for tracking performance is called TRA.
+# Additionally, we would also like to quantify this. We will use the package [`traccuracy`](https://traccuracy.readthedocs.io/en/latest/) to calculate some [standard metrics for cell tracking](http://celltrackingchallenge.net/evaluation-methodology/). For this exercise, we'll take a look at the following metrics:
 #
-# If you're interested in more detailed metrics, you can look at the false positive (FP) and false negative (FN) nodes, edges and division events.
-#
-# TODO: explain this better. Pick a few important metrics (TRA, FP Nodes/edges/divs, FN nodes/edges/divs, TP divs) and explain them. Also, make a table of those specific results that we can add "runs" to so we can compare results across runs without scrolling up and down.
+# - **TRA**: TRA is a metric established by the [Cell Tracking Challenge](http://celltrackingchallenge.net). It compares your solution graph to the ground truth graph and measures how many changes to edges and nodes would need to be made in order to make the graphs identical. TRA ranges between 0 and 1 with 1 indicating a perfect match between the solution and the ground truth. While TRAf is convenient to use in that it gives us a single number, it doesn't tell us what type of mistakes are being made in our solution.
+# - **Node Errors**: We can look at the number of false positive and false negative nodes in our solution which tells us how how many cells are being incorrectly included or excluded from the solution.
+# - **Edge Errors**: Similarly, the number of false positive and false negative edges in our graph helps us assess what types of mistakes our solution is making when linking cells between frames.
+# - **Division Errors**: Finally, as biologists we are often very interested in the division events that occur and want to ensure that they are being accurately identified. We can look at the number of true positive, false positive and false negative divisions to assess how our solution is capturing these important events.
 
 
 # %% [markdown]
@@ -623,11 +612,11 @@ def get_metrics(gt_graph, labels, run, results_df):
     Args:
         gt_graph (networkx.DiGraph): Ground truth graph.
         labels (np.ndarray): Ground truth detections.
-        pred_graph (networkx.DiGraph): Predicted graph.
-        pred_segmentation (np.ndarray): Predicted dense segmentation.
+        run (MotileRun): Instance of Motilerun
+        results_df (pd.DataFrame): Dataframe containing any prior results
 
     Returns:
-        results (dict): Dictionary of metric results.
+        results (pd.DataFrame): Dataframe of evaluation results
     """
     gt_graph = traccuracy.TrackingGraph(
         graph=gt_graph,
@@ -656,7 +645,7 @@ def get_metrics(gt_graph, labels, run, results_df):
     results_filtered.update(results[0]["results"])
     results_filtered.update(results[1]["results"]["Frame Buffer 0"])
     results_filtered["name"] = run.run_name
-    current_result = pd.DataFrame(results_filtered, index=[0])[columns]
+    current_result = pd.DataFrame(results_filtered, index=[0])[["name"] + columns]
 
     if results_df is None:
         results_df = current_result
@@ -698,7 +687,7 @@ results_df
 # ## Task 4 - Incorporating Known Direction of Motion
 #
 # So far, we have been using motile's EdgeDistance as an edge selection cost, which penalizes longer edges by computing the Euclidean distance between the endpoints. However, in our dataset we see a trend of upward motion in the cells, and the false detections at the top are not moving. If we penalize movement based on what we expect, rather than Euclidean distance, we can select more correct cells and penalize the non-moving artefacts at the same time.
-#  
+#
 #
 
 # %% [markdown]
@@ -707,14 +696,20 @@ results_df
 # </div>
 
 # %% tags=["task"]
-drift = ... ### YOUR CODE HERE ###
+drift = np.array([
+    -10, # Expected movement in y
+    0 # Expected movement in x
+])
 
 def add_drift_dist_attr(cand_graph, drift):
     for edge in cand_graph.edges():
-        ### YOUR CODE HERE ###
-        # get the location of the endpoints of the edge
-        # then compute the distance between the expected movement and the actual movement
-        # and save it in the "drift_dist" attribute (below)
+        source, target = edge
+        source_data = cand_graph.nodes[source]
+        source_pos = np.array([source_data["x"], source_data["y"]])
+        target_data = cand_graph.nodes[target]
+        target_pos = np.array([target_data["x"], target_data["y"]])
+
+        drift_dist = ... # Calculate the distance between the expected position after drift and the actual target position
         cand_graph.edges[edge]["drift_dist"] = drift_dist
 
 add_drift_dist_attr(cand_graph, drift)
@@ -742,7 +737,7 @@ add_drift_dist_attr(cand_graph, drift)
 # cost with an EdgeSelection cost using our new "drift_dist" attribute. The weight should be positive, since a higher distance from the expected drift should cost more, similar to our prior EdgeDistance cost. Also similarly, we need a negative constant to make sure that the overall cost of selecting tracks is negative.</p>
 # </div>
 
-# %%
+# %% tags=["task"]
 def solve_drift_optimization(cand_graph):
     """Set up and solve the network flow problem.
 
@@ -818,7 +813,7 @@ results_df
 # ## Bonus: Learning the Weights
 
 # %% [markdown]
-# Motile also provides the option to learn the best weights and constants using a (Structured Support Vector Machine)[https://en.wikipedia.org/wiki/Structured_support_vector_machine]. There is a tutorial on the motile documentation (here)[https://funkelab.github.io/motile/learning.html], but we will also walk you through an example below.
+# Motile also provides the option to learn the best weights and constants using a [Structured Support Vector Machine](https://en.wikipedia.org/wiki/Structured_support_vector_machine). There is a tutorial on the motile documentation [here](https://funkelab.github.io/motile/learning.html), but we will also walk you through an example below.
 #
 # We need some ground truth annotations on our candidate graph in order to learn the best weights. The next cell contains a function that matches our ground truth graph to our candidate graph using the predicted segmentations. The function checks for each ground truth node if it is inside one of our predicted segmentations. If it is, that candidate node is marked with attribute "gt" = True. Any unmatched candidate nodes have "gt" = False. We also annotate the edges in a similar fashion - if both endpoints of a GT edge are inside predicted segmentations, the corresponding candidate edge will have "gt" = True, while all other edges going out of that candidate node have "gt" = False.
 
@@ -851,7 +846,7 @@ def add_gt_annotations(gt_tracks, cand_graph, segmentation):
 
 # %%
 validation_times = [0, 3]
-validation_nodes = [node for node, data in cand_graph.nodes(data=True) 
+validation_nodes = [node for node, data in cand_graph.nodes(data=True)
                         if (data["t"] >= validation_times[0] and data["t"] < validation_times[1])]
 print(len(validation_nodes))
 validation_graph = cand_graph.subgraph(validation_nodes).copy()
@@ -875,16 +870,6 @@ print(f"{len(gt_pos_edges) + len(gt_neg_edges)} annotated: {len(gt_pos_edges)} T
 # <div class="alert alert-block alert-info"><h3>Bonus task: Add your best solver parameters</h3>
 # <p>Now, similar to before, we make the solver by adding costs and constraints. You can copy your best set of costs and constraints from before. It does not matter what weights and constants you choose. However, this time we just return the solver, rather than actually solving.</p>
 # </div>
-
-# %% tags=["task"]
-def get_ssvm_solver(cand_graph):
-
-    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
-    solver = motile.Solver(cand_trackgraph)
-
-    ### YOUR CODE HERE ###
-    return solver
-
 
 # %%
 def get_ssvm_solver(cand_graph):
