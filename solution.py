@@ -184,7 +184,7 @@ for node, data in gt_tracks.nodes(data=True):
     assert "x" in data, f"'x' attribute missing for node {node}"
     assert type(data["x"]) == float, f"'x' attribute has type {type(data['x'])}, expected 'float'"
     assert "y" in data, f"'y' attribute missing for node {node}"
-    assert type(data["y"]) == float, f"'y' attribute has type {type(daåa['y'])}, expected 'float'"
+    assert type(data["y"]) == float, f"'y' attribute has type {type(data['y'])}, expected 'float'"
 print("Your graph passed all the tests!")
 
 # %% [markdown]
@@ -305,7 +305,7 @@ for node, data in cand_graph.nodes(data=True):
     assert "x" in data, f"'x' attribute missing for node {node}"
     assert type(data["x"]) == float, f"'x' attribute has type {type(data['x'])}, expected 'float'"
     assert "y" in data, f"'y' attribute missing for node {node}"
-    assert type(data["y"]) == float, f"'y' attribute has type {type(daåa['y'])}, expected 'float'"
+    assert type(data["y"]) == float, f"'y' attribute has type {type(data['y'])}, expected 'float'"
 print("Your candidate graph passed all the tests!")
 
 # %% [markdown]
