@@ -876,6 +876,16 @@ print(f"{len(gt_pos_edges) + len(gt_neg_edges)} annotated: {len(gt_pos_edges)} T
 # <p>Now, similar to before, we make the solver by adding costs and constraints. You can copy your best set of costs and constraints from before. It does not matter what weights and constants you choose. However, this time we just return the solver, rather than actually solving.</p>
 # </div>
 
+# %% tags=["task"]
+def get_ssvm_solver(cand_graph):
+
+    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
+    solver = motile.Solver(cand_trackgraph)
+
+    ### YOUR CODE HERE ###
+    return solver
+
+
 # %%
 def get_ssvm_solver(cand_graph):
 
