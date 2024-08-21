@@ -475,7 +475,7 @@ def solve_basic_optimization(cand_graph):
     cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
     solver = motile.Solver(cand_trackgraph)
     ### YOUR CODE HERE ###
-    solver.solve()
+    solver.solve(timeout=120)
     solution_graph = graph_to_nx(solver.get_selected_subgraph())
 
     return solution_graph
@@ -505,7 +505,7 @@ def solve_basic_optimization(cand_graph):
     solver.add_constraint(motile.constraints.MaxParents(1))
     solver.add_constraint(motile.constraints.MaxChildren(2))
 
-    solver.solve()
+    solver.solve(timeout=120)
     solution_graph = graph_to_nx(solver.get_selected_subgraph())
     return solution_graph
 
@@ -526,6 +526,8 @@ def print_graph_stats(graph, name):
 #
 #
 # Our integer linear program (ILP) tries to use the proprietary solver Gurobi. You probably don't have a license, in which case the ILP will fall back to the open source solver SCIP.
+#
+# SCIP is slower than Gurobi - to deal with this, we add a 120 second timeout to the solve call, which should approximate the truly optimal solution. For larger problems, or cases where getting the most optimal solution is crucial, one could increase the timeout or get a Gurobi license (recommended).
 # </div>
 
 # %%
@@ -727,7 +729,7 @@ def adapt_basic_optimization(cand_graph):
     cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
     solver = motile.Solver(cand_trackgraph)
     ### YOUR CODE HERE ###
-    solver.solve()
+    solver.solve(timeout=120)
     solution_graph = graph_to_nx(solver.get_selected_subgraph())
 
     return solution_graph
@@ -772,7 +774,7 @@ def adapt_basic_optimization(cand_graph):
 
     solver.add_constraint(motile.constraints.MaxParents(1))
     solver.add_constraint(motile.constraints.MaxChildren(2))
-    solver.solve()
+    solver.solve(timeout=120)
     solution_graph = graph_to_nx(solver.get_selected_subgraph())
 
     return solution_graph
@@ -866,7 +868,7 @@ def solve_drift_optimization(cand_graph):
 
     ### YOUR CODE HERE ###
 
-    solver.solve()
+    solver.solve(timeout=120)
 
     solution_graph = graph_to_nx(solver.get_selected_subgraph())
     return solution_graph
@@ -914,7 +916,7 @@ def solve_drift_optimization(cand_graph):
     solver.add_constraint(motile.constraints.MaxParents(1))
     solver.add_constraint(motile.constraints.MaxChildren(2))
 
-    solver.solve()
+    solver.solve(timeout=120)
     solution_graph = graph_to_nx(solver.get_selected_subgraph())
     return solution_graph
 
@@ -1054,7 +1056,7 @@ optimal_weights
 def get_ssvm_solution(cand_graph, solver_weights):
     solver = get_ssvm_solver(cand_graph)
     solver.weights = solver_weights
-    solver.solve()
+    solver.solve(timeout=120)
     solution_graph = graph_to_nx(solver.get_selected_subgraph())
     return solution_graph
 
