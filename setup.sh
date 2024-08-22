@@ -8,60 +8,29 @@ then
     exit 1
 fi
 
-##################
-### Exercise 1 ###
-##################
-
 # Create environment
-mamba create -y -n 08-tracking python=3.9
+conda create -y -n 09-tracking python=3.11
 
 # Activate environment
-mamba activate 08-tracking
+conda activate 09-tracking
 
-# Install dependencies
-mamba install -y -c conda-forge napari pyqt
+# Install additional requirements
+if [[ "$CONDA_DEFAULT_ENV" == "09-tracking" ]]; then
+    echo "Environment activated successfully for package installs"
+    conda install -y -c conda-forge -c gurobi -c funkelab ilpy
+    pip install numpy "motile>=0.3" "traccuracy>=0.1.1" git+https://github.com/funkelab/motile_napari_plugin.git@track-viewer#egg=motile_plugin matplotlib ipywidgets nbformat pandas ipykernel
+    python -m ipykernel install --user --name "09-tracking"
+else
+    echo "Failed to activate environment for package installs. Dependencies not installed!"
+fi
 
-### Install tensorflow ###
-# from https://www.tensorflow.org/install/pip#linux
-mamba install -y -c conda-forge cudatoolkit=11.8.0
-python3 -m pip install nvidia-cudnn-cu11==8.6.0.163 tensorflow==2.13.*
-mkdir -p $CONDA_PREFIX/etc/conda/activate.d
-echo 'CUDNN_PATH=$(dirname $(python -c "import nvidia.cudnn;print(nvidia.cudnn.__file__)"))' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
-echo 'export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$CUDNN_PATH/lib:$LD_LIBRARY_PATH' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
-source $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
-# Verify install:
-python3 -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
-###########################
+conda deactivate
 
-pip install numpy<1.25
-pip install stardist
-pip install ipywidgets
+# Download data from s3
+wget https://dl-at-mbl-data.s3.us-east-2.amazonaws.com/2024/09_tracking/data.zip
+unzip data.zip
+rm data.zip
 
-# Make environment discoverable by Jupyter
-pip install ipykernel
-
-mamba deactivate
-
-##################
-### Exercise 2 ###
-##################
-
-# Create environment
-mamba create -y -n 08-ilp-tracking python=3.9
-
-# Activate environment
-mamba activate 08-ilp-tracking
-
-# Install dependencies
-mamba install -y -c conda-forge napari pyqt
-mamba install -y -c conda-forge -c gurobi -c funkelab ilpy
-pip install git+https://github.com/funkelab/motile
-pip install traccuracy
-pip install plotly
-pip install ipywidgets
-pip install nbformat
-
-# Make environment discoverable by Jupyter
-pip install ipykernel
-
-mamba deactivate
+# Alternatively, use the aws cli
+# mkdir data
+# aws s3 cp s3://dl-at-mbl-data/2024/09_tracking/ data/ --recursive --no-sign-request

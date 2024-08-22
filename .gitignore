@@ -1,4 +1,8 @@
 /iframe_figures
+*.zarr
+.DS_Store
+/data
+data.zip
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
