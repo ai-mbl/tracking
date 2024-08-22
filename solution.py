@@ -214,7 +214,7 @@ print("Your graph passed all the tests!")
 
 # %%
 widget = plugin_widgets.TreeWidget(viewer)
-viewer.window.add_dock_widget(widget, name="Lineage View", area="bottom")
+viewer.window.add_dock_widget(widget, name="Lineage View", area="right")
 
 # %% [markdown]
 # Here we add a "MotileRun" to the napari tracking visualization widget (the "view_controller"). A MotileRun includes a name, a set of tracks, and a segmentation. The tracking visualization widget will add:
