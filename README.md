@@ -3,7 +3,7 @@
 This exercise was created by Benjamin Gallusser and Albert Dominguez Mantes,
 and updated for 2024 by Caroline Malin-Mayor.
 
-<img src="figures/tracking.gif" width="500"/><img src="figures/ilp_nodiv.png" width="500"/>
+<img src="figures/tracking.gif" width="500"/>
 
 ## Objective:
 - Write a pipeline that takes in cell detections and links them across time to obtain lineage trees
@@ -16,13 +16,7 @@ and updated for 2024 by Caroline Malin-Mayor.
     ```
     to set up the environment for this exercise. This will take a few minutes.
    
-2. Run
-    ```
-    jupyter lab
-    ```
-    , double-click on the `exercise.ipynb` files and follow the instructions in the notebook.
-    
-    Alternatively, open `exercise.ipynb` in VSCode with the jupyter extension and the `09-tracking` environment activated.
+2. Open `exercise.ipynb` in VSCode with the jupyter extension and select the `09-tracking` kernel.
 
 
 ## Overview: Tracking by detection with an integer linear program (ILP)
