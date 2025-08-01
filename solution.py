@@ -10,7 +10,7 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.11.2
 #   kernelspec:
-#     display_name: Python 3 (ipykernel)
+#     display_name: 09-tracking
 #     language: python
 #     name: python3
 # ---
@@ -90,6 +90,7 @@ import scipy
 import motile
 
 import zarr
+import geff
 from motile_toolbox.candidate_graph import graph_to_nx
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 import motile_plugin.widgets as plugin_widgets
@@ -107,7 +108,7 @@ from typing import Iterable, Any
 # ## Load the dataset and inspect it in napari
 
 # %% [markdown]
-# For this exercise we will be working with a fluorescence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA). It is similar to the dataset at https://zenodo.org/record/4034976#.YwZRCJPP1qt. The raw data, pre-computed segmentations, and detection probabilities are saved in a zarr, and the ground truth tracks are saved in a csv. The segmentation was generated with a pre-trained StartDist model, so there may be some segmentation errors which can affect the tracking process. The detection probabilities also come from StarDist, and are downsampled in x and y by 2 compared to the detections and raw data.
+# For this exercise we will be working with a fluorescence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA). It is similar to the dataset at https://zenodo.org/record/4034976#.YwZRCJPP1qt. The raw data, pre-computed segmentations, detection probabilities, and ground truth tracks are saved in a zarr. The segmentation was generated with a pre-trained StartDist model, so there may be some segmentation errors which can affect the tracking process. The detection probabilities also come from StarDist, and are downsampled in x and y by 2 compared to the detections and raw data.
 
 # %% [markdown]
 # Here we load the raw image data, segmentation, and probabilities from the zarr, and view them in napari.
@@ -132,81 +133,22 @@ viewer.add_labels(segmentation, name="seg")
 # After running the previous cell, open NoMachine and check for an open napari window.
 
 # %% [markdown]
-# ## Read in the ground truth graph
-#
+# ## Read in the ground truth graph and inspect it in napari
 # In addition to the image data and segmentations, we also have a ground truth tracking solution.
-# The ground truth tracks are stored in a CSV with five columns: id, time, x, y, and parent_id.
+# The ground truth tracks are stored in a [`geff`](http://liveimagetrackingtools.org/geff/latest/) (Graph Exchange File Format) group in the zarr.
+# This is a new format that is in the process of being adopted by the tracking community, with support for import/export from a variety of
+# common tools, such as TrackMate, `trackastra`, `napari`, and `traccuracy`.
 #
-# Each row in the CSV represents a detection at location (time, x, y) with the given id.
-# If the parent_id is not -1, it represents the id of the parent detection in the previous time frame.
-# For cell tracking, tracks can usually be stored in this format, because there is no merging.
-# With merging, a more complicated data struture would be needed.
-#
+# Each node in the graph represents a detection, and has properties `t`, `y`, and `x` holding the location of that detection.
+# Edges in the graph link detected cells between time frames: edges go from a detection in time `t` to the same cell (or its daughter) detected in time `t + 1`.
 # Note that there are no ground truth segmentations - each detection is just a point representing the center of a cell.
 #
-
-# %% [markdown]
+# Here we load the graph using the `geff` API into a `networkx` graph, a common library for working with graphs in Python. Specifically, we load it into a [`nx.DiGraph`](https://networkx.org/documentation/stable/reference/classes/digraph.html), since our edges are directed.
 #
-# <div class="alert alert-block alert-info"><h3>Task 1: Read in the ground truth graph</h3>
-#
-# For this task, you will read in the csv and store the tracks as a <a href=https://en.wikipedia.org/wiki/Directed_graph>directed graph</a> using the `networkx` library. Take a look at the documentation for the networkx DiGraph <a href=https://networkx.org/documentation/stable/reference/classes/digraph.html>here</a> to learn how to create a graph, add nodes and edges with attributes, and access those nodes and edges.
-#
-# Here are the requirements for the graph:
-# <ol>
-#     <li>Each row in the CSV becomes a node in the graph</li>
-#     <li>The node id is an integer specified by the "id" column in the csv</li>
-#     <li>Each node has an integer "t" attribute specified by the "time" column in the csv</li>
-#     <li>Each node has float "x", "y" attributes storing the corresponding values from the csv</li>
-#     <li>If the parent_id is not -1, then there is an edge in the graph from "parent_id" to "id"</li>
-# </ol>
-#
-# You can read the CSV using basic python file io, csv.DictReader, pandas, or any other tool you are comfortable with. If not using pandas, remember to cast your read in values from strings to integers or floats.
-# </div>
-#
-
-# %% tags=["task"]
-def read_gt_tracks():
-    gt_tracks = nx.DiGraph()
-    ### YOUR CODE HERE ###
-    return gt_tracks
-
-gt_tracks = read_gt_tracks()
-
-
-# %% tags=["solution"]
-def read_gt_tracks():
-    gt_tracks = nx.DiGraph()
-    with open("data/breast_cancer_fluo_gt_tracks.csv") as f:
-        reader = DictReader(f)
-        for row in reader:
-            _id = int(row["id"])
-            attrs = {
-                "x": float(row["x"]),
-                "y": float(row["y"]),
-                "t": int(row["time"]),
-            }
-            parent_id = int(row["parent_id"])
-            gt_tracks.add_node(_id, **attrs)
-            if parent_id != -1:
-                gt_tracks.add_edge(parent_id, _id)
-
-    return gt_tracks
-
-gt_tracks = read_gt_tracks()
 
 # %%
-# run this cell to test your implementation
-assert gt_tracks.number_of_nodes() == 5490, f"Found {gt_tracks.number_of_nodes()} nodes, expected 5490"
-assert gt_tracks.number_of_edges() == 5120, f"Found {gt_tracks.number_of_edges()} edges, expected 5120"
-for node, data in gt_tracks.nodes(data=True):
-    assert type(node) == int, f"Node id {node} has type {type(node)}, expected 'int'"
-    assert "t" in data, f"'t' attribute missing for node {node}"
-    assert type(data["t"]) == int, f"'t' attribute has type {type(data['t'])}, expected 'int'"
-    assert "x" in data, f"'x' attribute missing for node {node}"
-    assert type(data["x"]) == float, f"'x' attribute has type {type(data['x'])}, expected 'float'"
-    assert "y" in data, f"'y' attribute missing for node {node}"
-    assert type(data["y"]) == float, f"'y' attribute has type {type(data['y'])}, expected 'float'"
-print("Your graph passed all the tests!")
+gt_tracks, metadata = geff.read_nx("data/breast_cancer_fluo.zarr/gt_tracks.geff")
+print(f"The ground truth tracks have {gt_tracks.number_of_nodes()} nodes and {gt_tracks.number_of_edges()} edges")
 
 # %% [markdown]
 # Here we set up a napari widget for visualizing the tracking results. This is part of the motile napari plugin, not part of core napari.
@@ -248,7 +190,7 @@ widget.view_controller.update_napari_layers(ground_truth_run, time_attr="t", pos
 
 
 # %% [markdown]
-# <div class="alert alert-block alert-info"><h3>Task 2: Extract candidate nodes from the predicted segmentations</h3>
+# <div class="alert alert-block alert-info"><h3>Task 1: Extract candidate nodes from the predicted segmentations</h3>
 # First we need to turn each segmentation into a node in a `networkx.DiGraph`.
 # Use <a href=https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.regionprops>skimage.measure.regionprops</a> to extract properties from each segmentation, and create a candidate graph with nodes only.
 #
@@ -444,8 +386,8 @@ print(f"Our ground truth track graph has {gt_tracks.number_of_nodes()} nodes and
 # `motile` ([docs here](https://funkelab.github.io/motile/)), makes it easy to link with an ILP in python by implementing common linking constraints and costs.
 
 # %% [markdown]
-# ## Task 3 - Basic tracking with motile
-# <div class="alert alert-block alert-info"><h3>Task 3: Set up a basic motile tracking pipeline</h3>
+# ## Task 2 - Basic tracking with motile
+# <div class="alert alert-block alert-info"><h3>Task 2: Set up a basic motile tracking pipeline</h3>
 # <p>Use the motile <a href=https://funkelab.github.io/motile/quickstart.html#sec-quickstart>quickstart</a> example to set up a basic motile pipeline for our task.
 #
 # Here are some key similarities and differences between the quickstart and our task:
@@ -749,7 +691,7 @@ def run_pipeline(cand_graph, run_name, results_df):
 # Don't forget to rename your run below, so you can tell them apart in the results table
 results_df = run_pipeline(cand_graph, "basic_solution_2", results_df)
 results_df
-   
+
 
 # %% tags=["solution"]
 def adapt_basic_optimization(cand_graph):
@@ -793,7 +735,7 @@ def run_pipeline(cand_graph, run_name, results_df):
 
 results_df = run_pipeline(cand_graph, "basic_solution_2", results_df)
 results_df
-   
+
 
 # %% [markdown]
 # ## Customizing the Tracking Task
@@ -806,14 +748,14 @@ results_df
 # The first way is the most common, and is quite flexible, so we will focus on an example of this type of customization.
 
 # %% [markdown]
-# ## Task 4 - Incorporating Known Direction of Motion
+# ## Task 3 - Incorporating Known Direction of Motion
 #
 # So far, we have been using motile's EdgeDistance as an edge selection cost, which penalizes longer edges by computing the Euclidean distance between the endpoints. However, in our dataset we see a trend of upward motion in the cells, and the false detections at the top are not moving. If we penalize movement based on what we expect, rather than Euclidean distance, we can select more correct cells and penalize the non-moving artefacts at the same time.
 #
 #
 
 # %% [markdown]
-# <div class="alert alert-block alert-info"><h3>Task 4a: Add a drift distance attribute</h3>
+# <div class="alert alert-block alert-info"><h3>Task 3a: Add a drift distance attribute</h3>
 # <p> For this task, we need to determine the "expected" amount of motion, then add an attribute to our candidate edges that represents distance from the expected motion direction.</p>
 # </div>
 
@@ -848,7 +790,7 @@ add_drift_dist_attr(cand_graph, drift)
 
 
 # %% [markdown]
-# <div class="alert alert-block alert-info"><h3>Task 4b: Add a drift distance attribute</h3>
+# <div class="alert alert-block alert-info"><h3>Task 3b: Add a drift distance attribute</h3>
 # <p> Now, we set up yet another solving pipeline. This time, we will replace our EdgeDistance
 # cost with an EdgeSelection cost using our new "drift_dist" attribute. The weight should be positive, since a higher distance from the expected drift should cost more, similar to our prior EdgeDistance cost. Also similarly, we need a negative constant to make sure that the overall cost of selecting tracks is negative.</p>
 # </div>
