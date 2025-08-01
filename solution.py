@@ -585,7 +585,7 @@ def relabel_segmentation(
     for node, data in solution_nx_graph.nodes(data=True):
         time_frame = solution_nx_graph.nodes[node]["t"]
         previous_seg_id = node
-        track_id = solution_nx_graph.nodes[node]["tracklet_id"]
+        track_id = solution_nx_graph.nodes[node]["track_id"]
         previous_seg_mask = (
             segmentation[time_frame] == previous_seg_id
         )
@@ -669,12 +669,12 @@ def get_metrics(gt_graph, labels, run, results_df):
     pred_graph = traccuracy.TrackingGraph(
         graph=run.tracks,
         frame_key="t",
-        label_key="tracklet_id",
+        label_key="track_id",
         location_keys=("x", "y"),
         segmentation=np.squeeze(run.output_segmentation),
     )
 
-    results = traccuracy.run_metrics(
+    results, _ = traccuracy.run_metrics(
         gt_data=gt_graph,
         pred_data=pred_graph,
         matcher=IOUMatcher(iou_threshold=0.3, one_to_one=True),
