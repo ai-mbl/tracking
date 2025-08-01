@@ -27,7 +27,7 @@ fi
 conda deactivate
 
 # Download data from s3
-wget https://dl-at-mbl-data.s3.us-east-2.amazonaws.com/2024/09_tracking/data.zip
+wget https://dl-at-mbl-data.s3.us-east-2.amazonaws.com/2025/09_tracking/data.zip
 unzip data.zip
 rm data.zip
 
