@@ -18,7 +18,7 @@ conda activate 09-tracking
 if [[ "$CONDA_DEFAULT_ENV" == "09-tracking" ]]; then
     echo "Environment activated successfully for package installs"
     conda install -y -c conda-forge -c gurobi -c funkelab ilpy
-    pip install numpy "motile>=0.3" "traccuracy>=0.1.1" git+https://github.com/funkelab/motile_napari_plugin.git@track-viewer#egg=motile_plugin matplotlib ipywidgets nbformat pandas ipykernel
+    pip install numpy "motile>=0.3" "traccuracy>=0.1.1" "motile-toolbox<0.4" "zarr<3", git+https://github.com/funkelab/motile_napari_plugin.git@track-viewer#egg=motile_plugin matplotlib ipywidgets nbformat pandas ipykernel
     python -m ipykernel install --user --name "09-tracking"
 else
     echo "Failed to activate environment for package installs. Dependencies not installed!"
@@ -27,9 +27,9 @@ fi
 conda deactivate
 
 # Download data from s3
-wget https://dl-at-mbl-data.s3.us-east-2.amazonaws.com/2024/09_tracking/data.zip
-unzip data.zip
-rm data.zip
+# wget https://dl-at-mbl-data.s3.us-east-2.amazonaws.com/2024/09_tracking/data.zip
+# unzip data.zip
+# rm data.zip
 
 # Alternatively, use the aws cli
 # mkdir data
