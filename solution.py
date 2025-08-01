@@ -91,6 +91,7 @@ import motile
 
 import zarr
 import geff
+import trackastra.model
 from motile_toolbox.candidate_graph import graph_to_nx
 from motile_toolbox.visualization.napari_utils import assign_tracklet_ids
 import motile_plugin.widgets as plugin_widgets
@@ -835,7 +836,7 @@ results_df
 
 # %% tags=["solution"]
 def solve_drift_optimization(cand_graph):
-    """Set up and solve the network flow problem.
+    """Set up and solve the ILP
 
     Args:
         cand_graph (nx.DiGraph): The candidate graph.
@@ -879,10 +880,162 @@ def run_pipeline(cand_graph, run_name, results_df):
 results_df = run_pipeline(cand_graph, "node_const_75", results_df)
 results_df
 
+# %% [markdown]
+#
 
 # %% [markdown]
-# Feel free to tinker with the weights and constants manually to try and improve the results.
-# You should be able to get something decent now, but this dataset is quite difficult! There are still many custom costs that could be added to improve the results - we will discuss some ideas together shortly.
+# ## Task 4 - Incorporating Trackastra Scores
+#
+# [Trackastra](https://www.ecva.net/papers/eccv_2024/papers_ECCV/papers/09819.pdf) is a transformer-based method for cell tracking. The method trains a transformer to predict an association score for each possible edge in the candidate graph, and then uses that score combined with distance to perform linking. The [trackastra package](https://github.com/weigertlab/trackastra) has published a general 2D model trained on a variety of datasets, which we will use to predict edge scores for our candidate graph. We will then incorporate the scores into our ILP in a similar fashion to our hand-crafted drift distance.
+
+# %%
+# download the pretrained model
+model = trackastra.model.Trackastra.from_pretrained("general_2d", device="automatic")
+# predict
+predictions = model._predict(image_data, segmentation)
+trackastra_nodes = predictions["nodes"]
+trackastra_scores = predictions["weights"]
+# show representative outputs
+print("Example node output:", trackastra_nodes[0])
+print("Example score output", trackastra_scores[0])
+
+
+# %% [markdown]
+# You can see that the trackastra model prediction outputs a set of nodes. Each node has:
+# - `id`, the trackastra defined identifier for the node
+# - `coords`, the location of the node in space
+# - `time`, the time frame of the node
+# - `label`, the label of the segmentation that was used to create the node
+# Trackastra likely does something very similar to the regionprops approach you used in Task 1 to get the nodes from the segmentation labels. However, there is an obvious difference: we used the label as the node id, because we knew our segmentation labels did not repeat across time. Since Trackastra does not assume this, it assigns a new `id` for each node.
+#
+# Trackastra also outputs a list of scores. Each score has:
+# - A tuple of node IDs, corresponding to the `id` field in the nodes list
+# - A float association score between 0 and 1, with higher values indicating that the model believes the nodes are the same or mother/daughter cells, and a low value indicating the model does not think the cells are associated. By default, scores below 0.05 are not included, although this setting can be changed.
+#
+# The code below adds a "trackastra_score" attribute to each edge in our candidate graph.
+
+# %%
+def add_trackastra_score_attr(cand_graph: nx.DiGraph, trackastra_nodes, trackastra_scores):
+    # create a mapping from trackastra node ids to our node ids (which are the segmentation label)
+    node_id_map = {
+        node["id"]: int(node["label"]) for node in trackastra_nodes
+    }
+    # find the candidate edge for each predicted score and add the attribute
+    for edge, score in trackastra_scores:
+        source, target = edge
+        cand_source = node_id_map[int(source)]
+        cand_target = node_id_map[int(target)]
+        if cand_graph.has_edge(cand_source, cand_target):
+            cand_graph.edges[(cand_source, cand_target)]["trackastra_score"] = score
+
+    # add a score of 0 to all edges that were not included in the trackastra predictions
+    for source, target, data in cand_graph.edges(data=True):
+        if "trackastra_score" not in data:
+            cand_graph.edges[(source, target)]["trackastra_score"] = 0
+
+# run the function to add the predicted trackastra scores to our candidate graph
+add_trackastra_score_attr(cand_graph, trackastra_nodes, trackastra_scores)
+
+
+# %% [markdown]
+# <div class="alert alert-block alert-info"><h3>Task 4: Solve with trackastra scores</h3>
+# <p> Now that our candidate graph contains trackastra scores, we set up our final solving pipeline! You should include an EdgeSelection cost based on the "trackastra_score" attribute. Trackastra scores are between 0 and 1, with higher scores being better. Should the weight be positive or negative? Remember, we are minimizing the total cost, so we will pick the edges that have the smallest/most negative cost. </p>
+# <p>You can choose what other costs (if any) to combine with the trackastra score, and how to weight them against each other. </p>
+# </div>
+
+# %% tags=["task"]
+def solve_trackastra_optimization(cand_graph):
+    """Set up and solve the ILP
+
+    Args:
+        cand_graph (nx.DiGraph): The candidate graph.
+
+    Returns:
+        nx.DiGraph: The networkx digraph with the selected solution tracks
+    """
+
+    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
+    solver = motile.Solver(cand_trackgraph)
+
+    ### YOUR CODE HERE ###
+    
+    solver.solve(timeout=120)
+    solution_graph = graph_to_nx(solver.get_selected_subgraph())
+    return solution_graph
+
+
+def run_pipeline(cand_graph, run_name, results_df):
+    solution_graph = solve_trackastra_optimization(cand_graph)
+    solution_seg = relabel_segmentation(solution_graph, segmentation)
+    run = MotileRun(
+        run_name=run_name,
+        tracks=solution_graph,
+        output_segmentation=np.expand_dims(solution_seg, axis=1)  # need to add a dummy dimension to fit API
+    )
+    widget.view_controller.update_napari_layers(run, time_attr="t", pos_attr=("x", "y"))
+    results_df = get_metrics(gt_tracks, gt_dets, run, results_df)
+    return results_df
+
+# Don't forget to rename your run if you re-run this cell!
+results_df = run_pipeline(cand_graph, "trackastra", results_df)
+results_df
+
+
+# %% tags=["solution"]
+def solve_trackastra_optimization(cand_graph):
+    """Set up and solve the ILP
+
+    Args:
+        cand_graph (nx.DiGraph): The candidate graph.
+
+    Returns:
+        nx.DiGraph: The networkx digraph with the selected solution tracks
+    """
+
+    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
+    solver = motile.Solver(cand_trackgraph)
+    solver.add_cost(
+        motile.costs.NodeSelection(weight=-100, constant=75, attribute="score")
+    )
+    solver.add_cost(
+        motile.costs.EdgeSelection(weight=-50, constant=25, attribute="trackastra_score")
+    )
+    solver.add_cost(motile.costs.Appear(constant=40.0))
+    solver.add_cost(motile.costs.Split(constant=45.0))
+
+    solver.add_constraint(motile.constraints.MaxParents(1))
+    solver.add_constraint(motile.constraints.MaxChildren(2))
+
+    solver.solve(timeout=120)
+    solution_graph = graph_to_nx(solver.get_selected_subgraph())
+    return solution_graph
+
+
+def run_pipeline(cand_graph, run_name, results_df):
+    solution_graph = solve_trackastra_optimization(cand_graph)
+    solution_seg = relabel_segmentation(solution_graph, segmentation)
+    run = MotileRun(
+        run_name=run_name,
+        tracks=solution_graph,
+        output_segmentation=np.expand_dims(solution_seg, axis=1)  # need to add a dummy dimension to fit API
+    )
+    widget.view_controller.update_napari_layers(run, time_attr="t", pos_attr=("x", "y"))
+    results_df = get_metrics(gt_tracks, gt_dets, run, results_df)
+    return results_df
+
+# Don't forget to rename your run if you re-run this cell!
+results_df = run_pipeline(cand_graph, "trackastra", results_df)
+results_df
+
+
+# %% [markdown]
+# <div class="alert alert-block alert-warning">
+# <ul>
+#   <li>How do the learned Trackastra scores compare to your hand crafted scores? </li>
+#   <li>What types of mistakes does your best model make?</li>
+#   <li>How could you improve the results even further? </li>
+# </ul>
+# </div>
 
 # %% [markdown]
 # <div class="alert alert-block alert-success"><h3>Checkpoint 4</h3>
