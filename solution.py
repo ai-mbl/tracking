@@ -602,7 +602,7 @@ def get_metrics(gt_graph, labels, run, results_df):
         results (pd.DataFrame): Dataframe of evaluation results
     """
     gt_graph = traccuracy.TrackingGraph(
-        graph=gt_graph,
+        graph=nx.DiGraph(gt_graph.copy()),
         frame_key="t",
         label_key="label",
         location_keys=("x", "y"),
