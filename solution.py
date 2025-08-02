@@ -12,7 +12,7 @@
 #   kernelspec:
 #     display_name: 09-tracking
 #     language: python
-#     name: python3
+#     name: 09-tracking
 # ---
 
 # %% [markdown]
@@ -54,8 +54,11 @@
 # This notebook was originally written by Benjamin Gallusser, and was edited for 2024 by Caroline Malin-Mayor.
 
 # %% [markdown]
-# Visualizations on a remote machine
-# If you are running this notebook on a remote machine, we need to set up a few things so that you can view `napari` on the remote machine.
+# ## Section 0: Setup
+# The setup.sh script already installed dependencies and downloaded the dataset we will be using. However, since we will be using `napari` to interactively visualize our tracking results, if you are running this nodebook on a remove machine, we need to set up a few things.
+
+# %% [markdown]
+# ### Set up NoMachine with port forwarding
 # 1. From VSCode connected to your remote machine, forward a port (e.g. `4000`) to your local machine.
 #     - Open you command palette in VSCode (usually CMD-Shift-P) and type "forward a port"
 #     - Then type in the desired port number `4000` and hit enter
@@ -78,7 +81,7 @@ import os
 os.environ["DISPLAY"] = "TODO"
 
 # %% [markdown]
-# ## Import packages
+# ### Import packages
 
 # %%
 import skimage
@@ -106,7 +109,10 @@ from tqdm.auto import tqdm
 from typing import Iterable, Any
 
 # %% [markdown]
-# ## Load the dataset and inspect it in napari
+# ## Section 1: Visualize the data
+
+# %% [markdown]
+# ### Load the dataset and inspect it in napari
 
 # %% [markdown]
 # For this exercise we will be working with a fluorescence microscopy time-lapse of breast cancer cells with stained nuclei (SiR-DNA). It is similar to the dataset at https://zenodo.org/record/4034976#.YwZRCJPP1qt. The raw data, pre-computed segmentations, detection probabilities, and ground truth tracks are saved in a zarr. The segmentation was generated with a pre-trained StartDist model, so there may be some segmentation errors which can affect the tracking process. The detection probabilities also come from StarDist, and are downsampled in x and y by 2 compared to the detections and raw data.
@@ -121,11 +127,14 @@ image_data = data_root["raw"][:]
 segmentation = data_root["seg"][:]
 probabilities = data_root["probs"][:]
 
+# %%
+viewer = napari.Viewer()
+
 # %% [markdown]
 # Let's use [napari](https://napari.org/tutorials/fundamentals/getting_started.html) to visualize the data. Napari is a wonderful viewer for imaging data that you can interact with in python, even directly out of jupyter notebooks. If you've never used napari, you might want to take a few minutes to go through [this tutorial](https://napari.org/stable/tutorials/fundamentals/viewer.html). Here we visualize the raw data, the predicted segmentations, and the predicted probabilities as separate layers. You can toggle each layer on and off in the layers list on the left.
 
 # %%
-viewer = napari.Viewer()
+
 viewer.add_image(probabilities, name="probs", scale=(1, 2, 2))
 viewer.add_image(image_data, name="raw")
 viewer.add_labels(segmentation, name="seg")
@@ -134,7 +143,7 @@ viewer.add_labels(segmentation, name="seg")
 # After running the previous cell, open NoMachine and check for an open napari window.
 
 # %% [markdown]
-# ## Read in the ground truth graph and inspect it in napari
+# ### Read in the ground truth graph and inspect it in napari
 # In addition to the image data and segmentations, we also have a ground truth tracking solution.
 # The ground truth tracks are stored in a [`geff`](http://liveimagetrackingtools.org/geff/latest/) (Graph Exchange File Format) group in the zarr.
 # This is a new format that is in the process of being adopted by the tracking community, with support for import/export from a variety of
@@ -180,7 +189,7 @@ ground_truth_run = MotileRun(
 widget.view_controller.update_napari_layers(ground_truth_run, time_attr="t", pos_attr=("x", "y"))
 
 # %% [markdown]
-# ## Build a candidate graph from the detections
+# ## Section 2 (Task 1) Build a candidate graph
 #
 # To set up our tracking problem, we will create a "candidate graph" - a DiGraph that contains all possible detections (graph nodes) and links (graph edges) between them.
 #
@@ -367,14 +376,14 @@ print(f"Our ground truth track graph has {gt_tracks.number_of_nodes()} nodes and
 
 
 # %% [markdown]
-# ## Checkpoint 1
-# <div class="alert alert-block alert-success"><h3>Checkpoint 1: We have visualized our data in napari and set up a candidate graph with all possible detections and links that we could select with our optimization task. </h3>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 1</h2>
+#     We have visualized our data in napari and set up a candidate graph with all possible detections and links that we could select with our optimization task.
 #
 # We will now together go through the `motile` <a href=https://funkelab.github.io/motile/quickstart.html#sec-quickstart>quickstart</a> example before you actually set up and run your own motile optimization. If you reach this checkpoint early, feel free to start reading through the quickstart and think of questions you want to ask!
 # </div>
 
 # %% [markdown]
-# ## Setting Up the Tracking Optimization Problem
+# ## Section 3 (Task 2): Set up the tracking optimization problem
 
 # %% [markdown]
 # As hinted earlier, our goal is to prune the candidate graph. More formally we want to find a graph $\tilde{G}=(\tilde{V}, \tilde{E})$ whose vertices $\tilde{V}$ are a subset of the candidate graph vertices $V$ and whose edges $\tilde{E}$ are a subset of the candidate graph edges $E$.
@@ -387,7 +396,6 @@ print(f"Our ground truth track graph has {gt_tracks.number_of_nodes()} nodes and
 # `motile` ([docs here](https://funkelab.github.io/motile/)), makes it easy to link with an ILP in python by implementing common linking constraints and costs.
 
 # %% [markdown]
-# ## Task 2 - Basic tracking with motile
 # <div class="alert alert-block alert-info"><h3>Task 2: Set up a basic motile tracking pipeline</h3>
 # <p>Use the motile <a href=https://funkelab.github.io/motile/quickstart.html#sec-quickstart>quickstart</a> example to set up a basic motile pipeline for our task.
 #
@@ -464,7 +472,7 @@ def print_graph_stats(graph, name):
 # %% [markdown]
 # Here we actually run the optimization, and compare the found solution to the ground truth.
 #
-# <div class="alert alert-block alert-warning"><h3>Gurobi license error</h3>
+# <div class="alert alert-block alert-warning"><h4>Gurobi license error</h4>
 # Please ignore the warning `Could not create Gurobi backend ...`.
 #
 #
@@ -493,12 +501,12 @@ print_graph_stats(gt_tracks, "gt tracks")
 # </div>
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h3>Checkpoint 2</h3>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 2</h2>
 # We will discuss the exercise up to this point as a group shortly. If you reach this checkpoint early, you can go on to Checkpoint 3.
 # </div>
 
 # %% [markdown]
-# ## Visualize the Result
+# ## Section 4: Visualize the Result
 # Rather than just looking at printed statistics about our solution, let's visualize it in `napari`.
 #
 # Before we can create our MotileRun, we need to create an output segmentation from our solution. Our output segmentation differs from our input segmentation in two main ways:
@@ -555,7 +563,7 @@ widget.view_controller.update_napari_layers(basic_run, time_attr="t", pos_attr=(
 #
 
 # %% [markdown]
-# ## Evaluation Metrics
+# ## Section 5: Evaluation Metrics
 #
 # We were able to understand via visualizing the predicted tracks on the images that the basic solution is far from perfect for this problem.
 #
@@ -739,7 +747,7 @@ results_df
 
 
 # %% [markdown]
-# ## Customizing the Tracking Task
+# ## Section 6 (Task 3): Incorporating prior knowledge
 #
 # There 3 main ways to encode prior knowledge about your task into the motile tracking pipeline.
 # 1. Add an attribute to the candidate graph and incorporate it with an existing cost
@@ -749,7 +757,7 @@ results_df
 # The first way is the most common, and is quite flexible, so we will focus on an example of this type of customization.
 
 # %% [markdown]
-# ## Task 3 - Incorporating Known Direction of Motion
+# ### Incorporating Known Direction of Motion
 #
 # So far, we have been using motile's EdgeDistance as an edge selection cost, which penalizes longer edges by computing the Euclidean distance between the endpoints. However, in our dataset we see a trend of upward motion in the cells, and the false detections at the top are not moving. If we penalize movement based on what we expect, rather than Euclidean distance, we can select more correct cells and penalize the non-moving artefacts at the same time.
 #
@@ -757,7 +765,7 @@ results_df
 
 # %% [markdown]
 # <div class="alert alert-block alert-info"><h3>Task 3a: Add a drift distance attribute</h3>
-# <p> For this task, we need to determine the "expected" amount of motion, then add an attribute to our candidate edges that represents distance from the expected motion direction.</p>
+# <p> For this task, we need to determine the "expected" amount of motion, then add an attribute to our candidate edges that represents distance from the expected motion direction. Look at the dataset in `napari` and see how much the cells move on average, and in which direction, to get the expected "drift" quantity. A more principled way could also be to compute the average edge direction in the ground truth annotations, but since we are evaluating on this dataset as well, that could be considered "cheating."</p>
 # </div>
 
 # %% tags=["task"]
@@ -877,14 +885,20 @@ def run_pipeline(cand_graph, run_name, results_df):
     return results_df
 
 # Don't forget to rename your run if you re-run this cell!
-results_df = run_pipeline(cand_graph, "node_const_75", results_df)
+results_df = run_pipeline(cand_graph, "drift_dist", results_df)
 results_df
 
 # %% [markdown]
-#
+# <div class="alert alert-block alert-warning"><h3>Question 4</h3>
+# If you have picked good weights, this approach should generally do better than the previous distance based approach. Don't forget to look at the results visually to qualitatively evaluate your solutions!
+# <ul>
+#   <li>On what metrics is it better? On what metrics might it be worse? What do you see visually about where your model does well or poorly?</li>
+#   <li>What are other situations where you can incorporate prior knowledge about the dataset into the costs and weights you choose to add? In what situations is this difficult?</li>
+# </ul>
+# </div>
 
 # %% [markdown]
-# ## Task 4 - Incorporating Trackastra Scores
+# ## Section 7 (Task 4) - Incorporating Trackastra Scores
 #
 # [Trackastra](https://www.ecva.net/papers/eccv_2024/papers_ECCV/papers/09819.pdf) is a transformer-based method for cell tracking. The method trains a transformer to predict an association score for each possible edge in the candidate graph, and then uses that score combined with distance to perform linking. The [trackastra package](https://github.com/weigertlab/trackastra) has published a general 2D model trained on a variety of datasets, which we will use to predict edge scores for our candidate graph. We will then incorporate the scores into our ILP in a similar fashion to our hand-crafted drift distance.
 
@@ -906,6 +920,7 @@ print("Example score output", trackastra_scores[0])
 # - `coords`, the location of the node in space
 # - `time`, the time frame of the node
 # - `label`, the label of the segmentation that was used to create the node
+#
 # Trackastra likely does something very similar to the regionprops approach you used in Task 1 to get the nodes from the segmentation labels. However, there is an obvious difference: we used the label as the node id, because we knew our segmentation labels did not repeat across time. Since Trackastra does not assume this, it assigns a new `id` for each node.
 #
 # Trackastra also outputs a list of scores. Each score has:
@@ -998,7 +1013,10 @@ def solve_trackastra_optimization(cand_graph):
         motile.costs.NodeSelection(weight=-100, constant=75, attribute="score")
     )
     solver.add_cost(
-        motile.costs.EdgeSelection(weight=-50, constant=25, attribute="trackastra_score")
+        motile.costs.EdgeSelection(weight=1.0, constant=-30, attribute="drift_dist"), name="drift"
+    )
+    solver.add_cost(
+        motile.costs.EdgeSelection(weight=-50, constant=25, attribute="trackastra_score"), name="trackastra"
     )
     solver.add_cost(motile.costs.Appear(constant=40.0))
     solver.add_cost(motile.costs.Split(constant=45.0))
@@ -1029,7 +1047,7 @@ results_df
 
 
 # %% [markdown]
-# <div class="alert alert-block alert-warning">
+# <div class="alert alert-block alert-warning"><h3>Question 5</h3>
 # <ul>
 #   <li>How do the learned Trackastra scores compare to your hand crafted scores? </li>
 #   <li>What types of mistakes does your best model make?</li>
@@ -1038,7 +1056,7 @@ results_df
 # </div>
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h3>Checkpoint 4</h3>
+# <div class="alert alert-block alert-success"><h2>Checkpoint 4</h2>
 # That is the end of the main exercise! If you have extra time, feel free to go onto the below bonus exercise to see how to learn the weights of your costs instead of setting them manually.
 # </div>
 

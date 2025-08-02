@@ -1,7 +1,7 @@
 # Exercise 9 - Tracking
 
 This exercise was created by Benjamin Gallusser and Albert Dominguez Mantes,
-and updated for 2024 by Caroline Malin-Mayor.
+and updated for 2024/2025 by Caroline Malin-Mayor.
 
 <img src="figures/tracking.gif" width="500"/>
 
