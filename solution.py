@@ -8,7 +8,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.11.2
+#       jupytext_version: 1.17.2
 #   kernelspec:
 #     display_name: 09-tracking
 #     language: python
@@ -1045,7 +1045,6 @@ def run_pipeline(cand_graph, run_name, results_df):
 results_df = run_pipeline(cand_graph, "trackastra", results_df)
 results_df
 
-
 # %% [markdown]
 # <div class="alert alert-block alert-warning"><h3>Question 5</h3>
 # <ul>
@@ -1057,149 +1056,6 @@ results_df
 
 # %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint 4</h2>
-# That is the end of the main exercise! If you have extra time, feel free to go onto the below bonus exercise to see how to learn the weights of your costs instead of setting them manually.
-# </div>
-
-# %% [markdown]
-# ## Bonus: Learning the Weights
-
-# %% [markdown]
-# Motile also provides the option to learn the best weights and constants using a [Structured Support Vector Machine](https://en.wikipedia.org/wiki/Structured_support_vector_machine). There is a tutorial on the motile documentation [here](https://funkelab.github.io/motile/learning.html), but we will also walk you through an example below.
-#
-# We need some ground truth annotations on our candidate graph in order to learn the best weights. The next cell contains a function that matches our ground truth graph to our candidate graph using the predicted segmentations. The function checks for each ground truth node if it is inside one of our predicted segmentations. If it is, that candidate node is marked with attribute "gt" = True. Any unmatched candidate nodes have "gt" = False. We also annotate the edges in a similar fashion - if both endpoints of a GT edge are inside predicted segmentations, the corresponding candidate edge will have "gt" = True, while all other edges going out of that candidate node have "gt" = False.
+# That is the end of the main exercise! If you have extra time, feel free to keep tuning your costs, examining the metrics and visualization tools, or try the bonus trackmate exercise.
 
 # %%
-def get_cand_id(gt_node, gt_track, cand_segmentation):
-    data = gt_track.nodes[gt_node]
-    return cand_segmentation[data["t"], int(data["x"])][int(data["y"])]
-
-def add_gt_annotations(gt_tracks, cand_graph, segmentation):
-    for gt_node in gt_tracks.nodes():
-        cand_id = get_cand_id(gt_node, gt_tracks, segmentation)
-        if cand_id != 0:
-            if cand_id in cand_graph:
-                cand_graph.nodes[cand_id]["gt"] = True
-                gt_succs = gt_tracks.successors(gt_node)
-                gt_succ_matches = [get_cand_id(gt_succ, gt_tracks, segmentation) for gt_succ in gt_succs]
-                cand_succs = cand_graph.successors(cand_id)
-                for succ in cand_succs:
-                    if succ in gt_succ_matches:
-                        cand_graph.edges[(cand_id, succ)]["gt"] = True
-                    else:
-                        cand_graph.edges[(cand_id, succ)]["gt"] = False
-    for node in cand_graph.nodes():
-       if "gt" not in cand_graph.nodes[node]:
-           cand_graph.nodes[node]["gt"] = False
-
-
-# %% [markdown]
-# The SSVM does not need dense ground truth - providing only some annotations frequently is sufficient to learn good weights, and is efficient for both computation time and annotation time. Below, we create a validation graph that spans the first three time frames, and annotate it with our ground truth.
-
-# %%
-validation_times = [0, 3]
-validation_nodes = [node for node, data in cand_graph.nodes(data=True)
-                        if (data["t"] >= validation_times[0] and data["t"] < validation_times[1])]
-print(len(validation_nodes))
-validation_graph = cand_graph.subgraph(validation_nodes).copy()
-add_gt_annotations(gt_tracks, validation_graph, segmentation)
-
-
-# %% [markdown]
-# Here we print the number of nodes and edges that have been annotated with True and False ground truth. It is important to provide negative/False annotations, as well as positive/True annotations, or the SSVM will try and select weights to pick everything.
-
-# %%
-gt_pos_nodes = [node_id for node_id, data in validation_graph.nodes(data=True) if "gt" in data and data["gt"] is True]
-gt_neg_nodes = [node_id for node_id, data in validation_graph.nodes(data=True) if "gt" in data and data["gt"] is False]
-gt_pos_edges = [(source, target) for source, target, data in validation_graph.edges(data=True) if "gt" in data and data["gt"] is True]
-gt_neg_edges = [(source, target) for source, target, data in validation_graph.edges(data=True) if "gt" in data and data["gt"] is False]
-
-print(f"{len(gt_pos_nodes) + len(gt_neg_nodes)} annotated: {len(gt_pos_nodes)} True, {len(gt_neg_nodes)} False")
-print(f"{len(gt_pos_edges) + len(gt_neg_edges)} annotated: {len(gt_pos_edges)} True, {len(gt_neg_edges)} False")
-
-
-# %% [markdown]
-# <div class="alert alert-block alert-info"><h3>Bonus task: Add your best solver parameters</h3>
-# <p>Now, similar to before, we make the solver by adding costs and constraints. You can copy your best set of costs and constraints from before. It does not matter what weights and constants you choose. However, this time we just return the solver, rather than actually solving.</p>
-# </div>
-
-# %% tags=["task"]
-def get_ssvm_solver(cand_graph):
-
-    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
-    solver = motile.Solver(cand_trackgraph)
-
-    ### YOUR CODE HERE ###
-    return solver
-
-
-# %%
-def get_ssvm_solver(cand_graph):
-
-    cand_trackgraph = motile.TrackGraph(cand_graph, frame_attribute="t")
-    solver = motile.Solver(cand_trackgraph)
-    solver.add_cost(
-        motile.costs.NodeSelection(weight=-1.0, attribute='score')
-    )
-    solver.add_cost(
-        motile.costs.EdgeSelection(weight=1.0, constant=-30, attribute="drift_dist")
-    )
-    solver.add_cost(motile.costs.Split(constant=20))
-
-    solver.add_constraint(motile.constraints.MaxParents(1))
-    solver.add_constraint(motile.constraints.MaxChildren(2))
-    return solver
-
-
-# %% [markdown]
-# To fit the best weights, the solver will solve the ILP many times and slowly converge to the best set of weights in a structured manner. Running the cell below may take some time - we recommend getting a Gurobi license if you want to use this technique in your research, as it speeds up solving quite a bit.
-#
-# At the end, it will print the optimal weights, and you can compare them to the weights you found by trial and error.
-
-# %%
-ssvm_solver = get_ssvm_solver(validation_graph)
-ssvm_solver.fit_weights(gt_attribute="gt", regularizer_weight=100, max_iterations=50)
-optimal_weights = ssvm_solver.weights
-optimal_weights
-
-
-# %% [markdown]
-# After we have our optimal weights, we need to solve with them on the full candidate graph.
-
-# %%
-def get_ssvm_solution(cand_graph, solver_weights):
-    solver = get_ssvm_solver(cand_graph)
-    solver.weights = solver_weights
-    solver.solve(timeout=120)
-    solution_graph = graph_to_nx(solver.get_selected_subgraph())
-    return solution_graph
-
-solution_graph = get_ssvm_solution(cand_graph, optimal_weights)
-
-
-# %% [markdown]
-# Finally, we can visualize and compute metrics on the solution found using the weights discovered by the SSVM.
-
-# %%
-solution_seg = relabel_segmentation(solution_graph, segmentation)
-
-# %%
-ssvm_run = MotileRun(
-    run_name="ssvm_solution",
-    tracks=solution_graph,
-    output_segmentation=np.expand_dims(solution_seg, axis=1)  # need to add a dummy dimension to fit API
-)
-
-widget.view_controller.update_napari_layers(ssvm_run, time_attr="t", pos_attr=("x", "y"))
-
-# %%
-
-results_df = get_metrics(gt_tracks, gt_dets, ssvm_run, results_df)
-results_df
-
-# %% [markdown]
-# <div class="alert alert-block alert-warning"><h3>Bonus Question: Interpret SSVM results</h3>
-# <p>
-# How do the results compare between the SSVM-discovered weights and your hand-crafted weights? What are the advantages and disadvantages of each approach in terms of (human or computer) time needed?
-# </p>
-# </div>
-#
