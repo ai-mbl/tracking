@@ -32,4 +32,4 @@ rm data.zip
 
 # Alternatively, use the aws cli
 # mkdir data
-# aws s3 cp s3://dl-at-mbl-data/2024/09_tracking/ data/ --recursive --no-sign-request
+# aws s3 cp s3://dl-at-mbl-data/2025/09_tracking/ data/ --recursive --no-sign-request
