@@ -501,11 +501,6 @@ print_graph_stats(gt_tracks, "gt tracks")
 # </div>
 
 # %% [markdown]
-# <div class="alert alert-block alert-success"><h2>Checkpoint 2</h2>
-# We will discuss the exercise up to this point as a group shortly. If you reach this checkpoint early, you can go on to Checkpoint 3.
-# </div>
-
-# %% [markdown]
 # ## Section 4: Visualize the Result
 # Rather than just looking at printed statistics about our solution, let's visualize it in `napari`.
 #
@@ -563,16 +558,35 @@ widget.view_controller.update_napari_layers(basic_run, time_attr="t", pos_attr=(
 #
 
 # %% [markdown]
-# ## Section 5: Evaluation Metrics
+# <div class="alert alert-block alert-success"><h2>Checkpoint 2</h2>
+# We will discuss the exercise up to this point as a group shortly, and then give a brief overview of quantitative tracking evaluation. If you reach this checkpoint early, you can start looking at the tracking metrics described in the next section.
+# </div>
+
+# %% [markdown]
+# ## Section 5 (Task 3): Evaluation Metrics
 #
-# We were able to understand via visualizing the predicted tracks on the images that the basic solution is far from perfect for this problem.
+# We were able to understand via visualizing the predicted tracks on the images that the basic solution is far from perfect for this problem. Additionally, we would also like to quantify this. We will use the package [`traccuracy`](https://traccuracy.readthedocs.io/en/latest/) to learn about and compute cell tracking metrics. While we looked at the basic documentation together during the checkpoint, take some time now to do a deeper dive into the matchers and metrics available, considering which metrics you might want to focus on for different biological analyses.
+
+
+# %% [markdown]
+# <div class="alert alert-block alert-warning"><h3>Question 3: Matchers and Metrics</h3>
+# <p>
+# <ul>
+#   <li>The example code we provide uses an <a href=https://traccuracy.readthedocs.io/en/latest/matchers/matchers.html>IOU Matcher</a>, which has a hyperparameter of "iou_threshold". How could changing the IOU threshold influence the quantitative output? What other matchers could we have chosen?</li>
+#   <li>What metrics would you like to know about for algorithm development? What about for downstream biological analysis?</li>
+# </ul>
+# </p>
+# </div>
 #
-# Additionally, we would also like to quantify this. We will use the package [`traccuracy`](https://traccuracy.readthedocs.io/en/latest/) to calculate some [standard metrics for cell tracking](http://celltrackingchallenge.net/evaluation-methodology/). For this exercise, we'll take a look at the following metrics:
+
+# %% [markdown]
+# The example code below uses an IOU matcher and computes the following metrics:
 #
-# - **TRA**: TRA is a metric established by the [Cell Tracking Challenge](http://celltrackingchallenge.net). It compares your solution graph to the ground truth graph and measures how many changes to edges and nodes would need to be made in order to make the graphs identical. TRA ranges between 0 and 1 with 1 indicating a perfect match between the solution and the ground truth. While TRAf is convenient to use in that it gives us a single number, it doesn't tell us what type of mistakes are being made in our solution.
+# - **TRA**: TRA is a metric established by the [Cell Tracking Challenge](http://celltrackingchallenge.net). It compares your solution graph to the ground truth graph and measures how many changes to edges and nodes would need to be made in order to make the graphs identical. TRA ranges between 0 and 1 with 1 indicating a perfect match between the solution and the ground truth. While TRA is convenient to use in that it gives us a single number, it doesn't tell us what type of mistakes are being made in our solution.
 # - **Node Errors**: We can look at the number of false positive and false negative nodes in our solution which tells us how how many cells are being incorrectly included or excluded from the solution.
 # - **Edge Errors**: Similarly, the number of false positive and false negative edges in our graph helps us assess what types of mistakes our solution is making when linking cells between frames.
 # - **Division Errors**: Finally, as biologists we are often very interested in the division events that occur and want to ensure that they are being accurately identified. We can look at the number of true positive, false positive and false negative divisions to assess how our solution is capturing these important events.
+#
 
 
 # %% [markdown]
@@ -593,6 +607,9 @@ def make_gt_detections(data_shape, gt_tracks, radius):
     return segmentation
 
 gt_dets = make_gt_detections(data_root["raw"].shape, gt_tracks, 10)
+
+# %% [markdown]
+# We then construct two `traccuracy.TrackingGraph` objects, one for ground truth and one for prediction, and then call `traccuracy.run_metrics` with our chosen matcher and metrics. The output is saved into a pandas data frame for easy comparison when we compute multiple solutions.
 
 # %%
 import pandas as pd
@@ -661,8 +678,13 @@ results_df
 #
 
 # %% [markdown]
+# <div class="alert alert-block alert-info"><h3>Task 3 (Optional): Adapt the above code to use your preferred matchers and metrics</h3>
+# <p>If there are additional metrics you found interesting from the documentation, you can try to add them now! The <a href=https://traccuracy.readthedocs.io/en/latest/metrics/ctc.html#ctc-bio-metrics>CTC Bio metrics</a> are an easy option to add, since they require the same matching we are already doing. You can also vary the IOUThreshold and see how it affects the scores reported. If you want a challenge, you can try using a different <a href=https://traccuracy.readthedocs.io/en/latest/matchers/matchers.html>matcher</a> or adding the <a href=https://traccuracy.readthedocs.io/en/latest/metrics/track_overlap.html>TrackOverlap</a> or <a href=https://traccuracy.readthedocs.io/en/latest/metrics/chota.html>CHOTA</a> metrics.</p>
+# </div>
+
+# %% [markdown]
 # <div class="alert alert-block alert-success"><h2>Checkpoint 3</h2>
-# If you reach this checkpoint with extra time, think about what kinds of improvements you could make to the costs and constraints to fix the issues that you are seeing. You can try tuning your weights and constants, or adding or removing motile Costs and Constraints, and seeing how that changes the output. We have added a convenience function in the box below where you can copy your solution from above, adapt it, and run the whole pipeline including visualizaiton and metrics computation.
+# If you reach this checkpoint with extra time, think about what kinds of improvements you could make to the costs and constraints to fix the issues that you are seeing. You can try tuning your weights and constants, or adding or removing motile Costs and Constraints, and seeing how that changes the output. We have added a convenience function in the box below where you can copy your solution from above, adapt it, and run the whole pipeline including visualization and metrics computation.
 #
 # Do not get frustrated if you cannot get good results yet! Try to think about why and what custom costs we might add.
 # </div>
@@ -747,7 +769,7 @@ results_df
 
 
 # %% [markdown]
-# ## Section 6 (Task 3): Incorporating prior knowledge
+# ## Section 6 (Task 4): Incorporating prior knowledge
 #
 # There 3 main ways to encode prior knowledge about your task into the motile tracking pipeline.
 # 1. Add an attribute to the candidate graph and incorporate it with an existing cost
@@ -764,7 +786,7 @@ results_df
 #
 
 # %% [markdown]
-# <div class="alert alert-block alert-info"><h3>Task 3a: Add a drift distance attribute</h3>
+# <div class="alert alert-block alert-info"><h3>Task 4a: Add a drift distance attribute</h3>
 # <p> For this task, we need to determine the "expected" amount of motion, then add an attribute to our candidate edges that represents distance from the expected motion direction. Look at the dataset in `napari` and see how much the cells move on average, and in which direction, to get the expected "drift" quantity. A more principled way could also be to compute the average edge direction in the ground truth annotations, but since we are evaluating on this dataset as well, that could be considered "cheating."</p>
 # </div>
 
@@ -799,7 +821,7 @@ add_drift_dist_attr(cand_graph, drift)
 
 
 # %% [markdown]
-# <div class="alert alert-block alert-info"><h3>Task 3b: Add a drift distance attribute</h3>
+# <div class="alert alert-block alert-info"><h3>Task 4b: Add a drift distance attribute</h3>
 # <p> Now, we set up yet another solving pipeline. This time, we will replace our EdgeDistance
 # cost with an EdgeSelection cost using our new "drift_dist" attribute. The weight should be positive, since a higher distance from the expected drift should cost more, similar to our prior EdgeDistance cost. Also similarly, we need a negative constant to make sure that the overall cost of selecting tracks is negative.</p>
 # </div>
@@ -898,7 +920,7 @@ results_df
 # </div>
 
 # %% [markdown]
-# ## Section 7 (Task 4) - Incorporating Trackastra Scores
+# ## Section 7 (Task 5) - Incorporating Trackastra Scores
 #
 # [Trackastra](https://www.ecva.net/papers/eccv_2024/papers_ECCV/papers/09819.pdf) is a transformer-based method for cell tracking. The method trains a transformer to predict an association score for each possible edge in the candidate graph, and then uses that score combined with distance to perform linking. The [trackastra package](https://github.com/weigertlab/trackastra) has published a general 2D model trained on a variety of datasets, which we will use to predict edge scores for our candidate graph. We will then incorporate the scores into our ILP in a similar fashion to our hand-crafted drift distance.
 
@@ -953,7 +975,7 @@ add_trackastra_score_attr(cand_graph, trackastra_nodes, trackastra_scores)
 
 
 # %% [markdown]
-# <div class="alert alert-block alert-info"><h3>Task 4: Solve with trackastra scores</h3>
+# <div class="alert alert-block alert-info"><h3>Task 5: Solve with trackastra scores</h3>
 # <p> Now that our candidate graph contains trackastra scores, we set up our final solving pipeline! You should include an EdgeSelection cost based on the "trackastra_score" attribute. Trackastra scores are between 0 and 1, with higher scores being better. Should the weight be positive or negative? Remember, we are minimizing the total cost, so we will pick the edges that have the smallest/most negative cost. </p>
 # <p>You can choose what other costs (if any) to combine with the trackastra score, and how to weight them against each other. </p>
 # </div>
