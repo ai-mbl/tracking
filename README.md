@@ -1,4 +1,4 @@
-# Exercise 9 - Tracking
+# Exercise 8 - Tracking
 
 This exercise was created by Benjamin Gallusser and Albert Dominguez Mantes,
 and updated for 2024/2025 by Caroline Malin-Mayor.
@@ -16,7 +16,7 @@ and updated for 2024/2025 by Caroline Malin-Mayor.
     ```
     to set up the environment for this exercise. This will take a few minutes.
    
-2. Open `exercise.ipynb` in VSCode with the jupyter extension and select the `09-tracking` kernel.
+2. Open `exercise.ipynb` in VSCode with the jupyter extension and select the `08-tracking` kernel.
 
 
 ## Overview: Tracking by detection with an integer linear program (ILP)
