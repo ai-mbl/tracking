@@ -51,11 +51,11 @@
 # ### YOUR CODE HERE ###
 # ```
 #
-# This notebook was originally written by Benjamin Gallusser, and was edited for 2024 by Caroline Malin-Mayor.
+# This notebook was originally written by Benjamin Gallusser, and was edited for 2024 and 2025 by Caroline Malin-Mayor.
 
 # %% [markdown]
 # ## Section 0: Setup
-# The setup.sh script already installed dependencies and downloaded the dataset we will be using. However, since we will be using `napari` to interactively visualize our tracking results, if you are running this nodebook on a remove machine, we need to set up a few things.
+# The setup.sh script already installed dependencies and downloaded the dataset we will be using. However, since we will be using `napari` to interactively visualize our tracking results, if you are running this notebook on a remote machine, we need to set up a few things.
 
 # %% [markdown]
 # ### Set up NoMachine with port forwarding
@@ -401,7 +401,7 @@ print(f"Our ground truth track graph has {gt_tracks.number_of_nodes()} nodes and
 #
 # Here are some key similarities and differences between the quickstart and our task:
 # <ul>
-#     <li>We do not have scores on our edges. However, we can use the edge distance as a cost, so that longer edges are more costly than shorter edges. Instead of using the <code>EdgeSelection</code> cost, we can use the <a href=https://funkelab.github.io/motile/api.html#edgedistance><code>EdgeDistance</code></a> cost with <code>position_attribute="pos"</code>. You will want a positive weight, since higher distances should be more costly, unlike in the example when higher scores were good and so we inverted them with a negative weight.</li>
+#     <li>We do not have scores on our edges. However, we can use the edge distance as a cost, so that longer edges are more costly than shorter edges. Instead of using the <code>EdgeSelection</code> cost, we can use the <a href=https://funkelab.github.io/motile/api.html#edgedistance><code>EdgeDistance</code></a> cost with <code>position_attribute=("x", "y")</code>. You will want a positive weight, since higher distances should be more costly, unlike in the example when higher scores were good and so we inverted them with a negative weight.</li>
 #     <li>Because distance is always positive, and you want a positive weight, you will want to include a negative constant on the <code>EdgeDistance</code> cost. If there are no negative selection costs, the ILP will always select nothing, because the cost of selecting nothing is zero.</li>
 #     <li>We want to allow divisions. So, we should pass in 2 to our <code>MaxChildren</code> constraint. The <code>MaxParents</code> constraint should have 1, the same as the quickstart, because neither task allows merging.</li>
 #     <li>You should include an <code>Appear</code> cost and a <code>NodeSelection</code> cost similar to the one in the quickstart.</li>
@@ -787,7 +787,7 @@ results_df
 
 # %% [markdown]
 # <div class="alert alert-block alert-info"><h3>Task 4a: Add a drift distance attribute</h3>
-# <p> For this task, we need to determine the "expected" amount of motion, then add an attribute to our candidate edges that represents distance from the expected motion direction. Look at the dataset in `napari` and see how much the cells move on average, and in which direction, to get the expected "drift" quantity. A more principled way could also be to compute the average edge direction in the ground truth annotations, but since we are evaluating on this dataset as well, that could be considered "cheating."</p>
+# <p> For this task, we need to determine the "expected" amount of motion, then add an attribute to our candidate edges that represents distance from the expected motion direction. Look at the dataset in `napari` and see how much the cells move on average, and in which direction, to get the expected "drift" quantity. The average edge direction in the ground truth annotations could also be used to verify the drift distance, but since we are evaluating on this dataset as well, that could be considered "cheating."</p>
 # </div>
 
 # %% tags=["task"]
