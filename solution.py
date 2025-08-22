@@ -31,16 +31,14 @@
 #     "deep learning" - the costs and constraints are usually hand-crafted to encode biological and data-based priors, although cost features can also be learned from data.
 # - **`napari`**: To visualize tracking inputs and outputs. Qualitative analysis is crucial for tuning the
 #     weights of the objective function and identifying data-specific costs and constraints.
+# - **`trackastra`**: To predict linking scores for cells in adjacent time points. `trackastra` is a transformer-based deep learning model, 
+#     with published pre-trained models that work on many types of input.
 # - **`traccuracy`**: To evaluate tracking results. Metrics such as accuracy can be misleading for tracking,
 #     because rare events such as divisions are much harder than the common linking tasks, and might
 #     be more biologically relevant for downstream analysis. Therefore, it is important to evaluate on
 #     a wide range of error metrics and determine which are most important for your use case.
 #
-# After running through the full tracking pipeline, from loading to evaluation, we will learn how to **incorporate custom costs** based on dataset-specific prior information. As a bonus exercise,
-# you can learn how to **learn the best cost weights** for a task from
-# from a small amount of ground truth tracking information.
-#
-# You can run this notebook on your laptop, a GPU is not needed.
+# After running through the full tracking pipeline, from loading to evaluation, we will learn how to **incorporate custom costs** based on dataset-specific prior information and deep learning models.
 #
 # <div class="alert alert-danger">
 # Set your python kernel to <code>08-tracking</code>

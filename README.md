@@ -29,6 +29,8 @@ and updated for 2024/2025 by Caroline Malin-Mayor.
 - **`motile`**: To set up and solve an Integer Lineage Program (ILP) for tracking.
     ILP-based methods frame tracking as a constrained optimization problem. The task is to select a subset of nodes/edges from a "candidate graph" of all possible nodes/edges. The subset must minimize user-defined costs (e.g. edge distance), while also satisfying a set of tracking constraints (e.g. each cell is linked to at most one cell in the previous frame). Note: this tracking approach is not inherently using
     "deep learning" - the costs and constraints are usually hand-crafted to encode biological and data-based priors, although cost features can also be learned from data.
+- **`trackastra`**: To predict linking scores for cells in adjacent time points. `trackastra` is a transformer-based deep learning model, 
+    with published pre-trained models that work on many types of input.
 - **`napari`**: To visualize tracking inputs and outputs. Qualitative analysis is crucial for tuning the 
     weights of the objective function and identifying data-specific costs and constraints.
 - **`traccuracy`**: To evaluate tracking results. Metrics such as accuracy can be misleading for tracking,
@@ -36,9 +38,9 @@ and updated for 2024/2025 by Caroline Malin-Mayor.
     be more biologically relevant for downstream analysis. Therefore, it is important to evaluate on
     a wide range of error metrics and determine which are most important for your use case.
 
-After running through the full tracking pipeline, from loading to evaluation, we will learn how to **incorporate custom costs** based on dataset-specific prior information. As a bonus exercise, 
-you can learn how to **learn the best cost weights** for a task from
-from a small amount of ground truth tracking information.
+After running through the full tracking pipeline, from loading to evaluation, we will learn how to **incorporate custom costs** based on dataset-specific prior 
+information and deep learning models.
+
 
 ### Bonus: Tracking with two-step Linear Assignment Problem (LAP)
 
