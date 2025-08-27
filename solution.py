@@ -633,7 +633,7 @@ def get_metrics(gt_graph, labels, run, results_df):
     )
 
     pred_graph = traccuracy.TrackingGraph(
-        graph=run.tracks,
+        graph=run.tracks.copy(),
         frame_key="t",
         label_key="track_id",
         location_keys=("x", "y"),
@@ -646,7 +646,7 @@ def get_metrics(gt_graph, labels, run, results_df):
         matcher=IOUMatcher(iou_threshold=0.3, one_to_one=True),
         metrics=[CTCMetrics(), DivisionMetrics()],
     )
-    columns = ["fp_nodes", "fn_nodes", "fp_edges", "fn_edges", "TRA", "True Positive Divisions", "False Positive Divisions", "False Negative Divisions"]
+    columns = ["fp_nodes", "fn_nodes", "fp_edges", "fn_edges", "TRA", "True Positive Divisions", "False Positive Divisions", "False Negative Divisions", "Wrong Children Divisions"]
     results_filtered = {}
     results_filtered.update(results[0]["results"])
     results_filtered.update(results[1]["results"]["Frame Buffer 0"])
