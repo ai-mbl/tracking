@@ -8,7 +8,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.17.2
+#       jupytext_version: 1.11.2
 #   kernelspec:
 #     display_name: 09-tracking
 #     language: python
@@ -199,9 +199,8 @@ widget.view_controller.update_napari_layers(ground_truth_run, time_attr="t", pos
 
 # %% [markdown]
 # <div class="alert alert-block alert-info"><h3>Task 1: Extract candidate nodes from the predicted segmentations</h3>
-# First we need to turn each segmentation into a node in a `networkx.DiGraph`.
-# Use <a href=https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.regionprops>skimage.measure.regionprops</a> to extract properties from each segmentation, and create a candidate graph with nodes only.
-#
+# First we need to turn each segmentation into a node in a <a href=https://networkx.org/documentation/stable/reference/classes/digraph.html>`networkx.DiGraph`</a>.
+# Use <a href=https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.regionprops>skimage.measure.regionprops</a> to extract properties from each segmentation, and create a candidate graph with nodes only. Check out this networkx <a href=https://networkx.org/documentation/stable/tutorial.html>tutorial</a> for examples of creating a networkx graph.
 #
 # Here are the requirements for the output graph:
 # <ol>
@@ -386,8 +385,9 @@ print(f"Our ground truth track graph has {gt_tracks.number_of_nodes()} nodes and
 # %% [markdown]
 # As hinted earlier, our goal is to prune the candidate graph. More formally we want to find a graph $\tilde{G}=(\tilde{V}, \tilde{E})$ whose vertices $\tilde{V}$ are a subset of the candidate graph vertices $V$ and whose edges $\tilde{E}$ are a subset of the candidate graph edges $E$.
 #
-#
 # Finding a good subgraph $\tilde{G}=(\tilde{V}, \tilde{E})$ can be formulated as an [integer linear program (ILP)](https://en.wikipedia.org/wiki/Integer_programming) (also, refer to the tracking lecture slides), where we assign a binary variable $x$ and a cost $c$ to each vertex and edge in $G$, and then computing $min_x c^Tx$.
+#
+# We can add linear costs for selecting nodes or edges. For example, the EdgeDistance cost $C_d(\tilde{E})$ of a particular selection $\tilde{E}$ is a linear equation $C_d(\tilde{E}) = \sum_{e \in E} x_e (w_d * d_e + c_d)$, where $w_es$ is a manually set weight, $C_es$ is a manually set constant, and $d_e$ is the distance of the two endpoints of that edge.
 #
 # A set of linear constraints ensures that the solution will be a feasible cell tracking graph. For example, if an edge is part of $\tilde{G}$, both its incident nodes have to be part of $\tilde{G}$ as well.
 #
@@ -786,10 +786,14 @@ results_df
 # %% [markdown]
 # <div class="alert alert-block alert-info"><h3>Task 4a: Add a drift distance attribute</h3>
 # <p> For this task, we need to determine the "expected" amount of motion, then add an attribute to our candidate edges that represents distance from the expected motion direction. Look at the dataset in `napari` and see how much the cells move on average, and in which direction, to get the expected "drift" quantity. The average edge direction in the ground truth annotations could also be used to verify the drift distance, but since we are evaluating on this dataset as well, that could be considered "cheating."</p>
+# <p>Notes on the networkx API: An edge with an id (0, 1) indicates that it connects nodes 0 and 1. You can access the attributes of those nodes using cand_graph.nodes[0] and cand_graph.nodes[1]. When we added candidate nodes to the graph earlier, we gave each node the properties x, y, and score. Checkout the networkx <a href=https://networkx.org/documentation/stable/tutorial.html#adding-attributes-to-graphs-nodes-and-edges>tutorial</a> if you need some examples of how to manipulate networkx graphs.
+# </p>
 # </div>
 
 # %% tags=["task"]
-drift = ... ### YOUR CODE HERE ###
+x_drift = ...  ### YOUR CODE HERE ###
+y_drift = ...  ### YOUR CODE HERE ###
+drift = np.array([y_drift, x_drift])
 
 def add_drift_dist_attr(cand_graph, drift):
     for edge in cand_graph.edges():
