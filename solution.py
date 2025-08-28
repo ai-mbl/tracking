@@ -668,7 +668,7 @@ results_df
 
 
 # %% [markdown]
-# <div class="alert alert-block alert-warning"><h3>Question 3: Interpret your results based on metrics</h3>
+# <div class="alert alert-block alert-warning"><h3>Question 4: Interpret your results based on metrics</h3>
 # <p>
 # What additional information, if any, do the metrics give you compared to the statistics and the visualization?
 # </p>
@@ -913,7 +913,7 @@ results_df = run_pipeline(cand_graph, "drift_dist", results_df)
 results_df
 
 # %% [markdown]
-# <div class="alert alert-block alert-warning"><h3>Question 4</h3>
+# <div class="alert alert-block alert-warning"><h3>Question 5</h3>
 # If you have picked good weights, this approach should generally do better than the previous distance based approach. Don't forget to look at the results visually to qualitatively evaluate your solutions!
 # <ul>
 #   <li>On what metrics is it better? On what metrics might it be worse? What do you see visually about where your model does well or poorly?</li>
@@ -1070,7 +1070,7 @@ results_df = run_pipeline(cand_graph, "trackastra", results_df)
 results_df
 
 # %% [markdown]
-# <div class="alert alert-block alert-warning"><h3>Question 5</h3>
+# <div class="alert alert-block alert-warning"><h3>Question 6</h3>
 # <ul>
 #   <li>How do the learned Trackastra scores compare to your hand crafted scores? </li>
 #   <li>What types of mistakes does your best model make?</li>
